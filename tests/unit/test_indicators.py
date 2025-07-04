@@ -22,7 +22,7 @@ from src.indicators.volatility import (
     calculate_keltner_channels
 )
 from src.indicators.levels import (
-    calculate_support_resistance, calculate_pivot_points, calculate_fibonacci_levels
+    calculate_support_resistance, calculate_pivot_points, calculate_fibonacci_retracements
 )
 from src.indicators.calculator import IndicatorCalculator
 

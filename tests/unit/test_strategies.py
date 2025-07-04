@@ -12,10 +12,10 @@ from typing import List, Dict, Any
 
 from src.strategies.base import TradingStrategy
 from src.strategies.ma_crossover import MovingAverageCrossover
-from src.strategies.rsi_trend import RSITrend
-from src.strategies.bollinger_breakout import BollingerBreakout
+from src.strategies.rsi_trend import RSITrendFollowing
+from src.strategies.bollinger_breakout import BollingerBandBreakout
 from src.strategies.macd_rsi import MACDRSIStrategy
-from src.strategies.sr_breakout import SRBreakout
+from src.strategies.sr_breakout import SupportResistanceBreakout
 from src.core.models import Signal, SignalType, MarketData, TimeFrame, OHLCV
 from src.indicators.moving_averages import calculate_ema, calculate_sma
 from src.indicators.momentum import calculate_rsi, calculate_macd

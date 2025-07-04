@@ -8,8 +8,8 @@ import asyncio
 
 from ..indicators.calculator import IndicatorCalculator
 from ..analysis.evaluator import PerformanceEvaluator
-from ..analysis.comparison import StrategyComparison
-from ..core.models import TimeFrame, StrategyType, OptimizationMetric
+from ..analysis.comparison import StrategyComparator
+from ..core.models import TimeFrame, StrategyStatus
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class AnalysisService:
         """Initialize the analysis service."""
         self.indicator_calculator = IndicatorCalculator()
         self.evaluator = PerformanceEvaluator()
-        self.comparison = StrategyComparison()
+        self.comparison = StrategyComparator()
         self.running_jobs = {}  # Track async jobs
         logger.info("AnalysisService initialized")
     
@@ -67,9 +67,9 @@ class AnalysisService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameter_ranges: Dict[str, List[Any]],
-        optimization_metric: OptimizationMetric,
+        optimization_metric: str,
         initial_capital: float = 10000.0,
         commission: float = 0.0  # Default to commission-free trading
     ) -> Dict[str, Any]:
@@ -114,9 +114,9 @@ class AnalysisService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameter_ranges: Dict[str, List[Any]],
-        optimization_metric: OptimizationMetric,
+        optimization_metric: str,
         initial_capital: float = 10000.0,
         commission: float = 0.0  # Default to commission-free trading
     ) -> str:
@@ -151,9 +151,9 @@ class AnalysisService:
         job_id: str,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameter_ranges: Dict[str, List[Any]],
-        optimization_metric: OptimizationMetric,
+        optimization_metric: str,
         initial_capital: float,
         commission: float
     ):
@@ -227,7 +227,7 @@ class AnalysisService:
     
     async def get_strategy_rankings(
         self,
-        metric: OptimizationMetric,
+        metric: str,
         symbol: Optional[str] = None,
         timeframe: Optional[TimeFrame] = None,
         limit: Optional[int] = None
@@ -267,7 +267,7 @@ class AnalysisService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        metric: OptimizationMetric
+        metric: str
     ) -> Optional[Dict[str, Any]]:
         """
         Get the best performing strategy for a specific symbol and timeframe.
@@ -340,7 +340,7 @@ class AnalysisService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """

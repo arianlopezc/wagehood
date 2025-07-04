@@ -13,16 +13,16 @@ from unittest.mock import Mock, patch
 from src.core.models import MarketData, TimeFrame, BacktestResult
 from src.data.mock_generator import MockDataGenerator
 from src.strategies.ma_crossover import MovingAverageCrossover
-from src.strategies.rsi_trend import RSITrend
-from src.strategies.bollinger_breakout import BollingerBreakout
+from src.strategies.rsi_trend import RSITrendFollowing
+from src.strategies.bollinger_breakout import BollingerBandBreakout
 from src.strategies.macd_rsi import MACDRSIStrategy
-from src.strategies.sr_breakout import SRBreakout
+from src.strategies.sr_breakout import SupportResistanceBreakout
 from src.backtest.engine import BacktestEngine, BacktestConfig
 from src.services.data_service import DataService
 from src.services.backtest_service import BacktestService
 from src.services.analysis_service import AnalysisService
-from src.analysis.evaluator import StrategyEvaluator
-from src.analysis.comparison import StrategyComparison
+from src.analysis.evaluator import PerformanceEvaluator
+from src.analysis.comparison import StrategyComparator
 
 
 class TestFullAnalysisWorkflow:

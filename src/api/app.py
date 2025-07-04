@@ -12,11 +12,13 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .routes import data, analysis, results
+from .routes import data, analysis, results, realtime
 from .schemas import ErrorResponse
 from ..services.data_service import DataService
 from ..services.backtest_service import BacktestService
 from ..services.analysis_service import AnalysisService
+from ..realtime.stream_processor import StreamProcessor
+from ..realtime.config_manager import ConfigManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,10 +36,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         backtest_service = BacktestService()
         analysis_service = AnalysisService()
         
+        # Initialize real-time services
+        config_manager = ConfigManager()
+        stream_processor = StreamProcessor()
+        
         # Store services in app state
         app.state.data_service = data_service
         app.state.backtest_service = backtest_service
         app.state.analysis_service = analysis_service
+        app.state.config_manager = config_manager
+        app.state.stream_processor = stream_processor
         
         logger.info("Services initialized successfully")
         
@@ -56,6 +64,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Cleaning up backtest service...")
         if hasattr(app.state, 'analysis_service'):
             logger.info("Cleaning up analysis service...")
+        if hasattr(app.state, 'stream_processor'):
+            logger.info("Shutting down stream processor...")
+            await app.state.stream_processor.shutdown()
+        if hasattr(app.state, 'config_manager'):
+            logger.info("Cleaning up config manager...")
 
 
 # Create FastAPI app with lifespan
@@ -185,6 +198,21 @@ async def detailed_health_check():
         health_info["services"]["analysis"] = f"unhealthy: {e}"
         health_info["status"] = "degraded"
     
+    # Check real-time services
+    try:
+        config_manager = app.state.config_manager
+        health_info["services"]["config_manager"] = "healthy"
+    except Exception as e:
+        health_info["services"]["config_manager"] = f"unhealthy: {e}"
+        health_info["status"] = "degraded"
+    
+    try:
+        stream_processor = app.state.stream_processor
+        health_info["services"]["stream_processor"] = "healthy"
+    except Exception as e:
+        health_info["services"]["stream_processor"] = f"unhealthy: {e}"
+        health_info["status"] = "degraded"
+    
     return health_info
 
 
@@ -192,6 +220,7 @@ async def detailed_health_check():
 app.include_router(data.router, prefix="/data", tags=["Data"])
 app.include_router(analysis.router, prefix="/analysis", tags=["Analysis"])
 app.include_router(results.router, prefix="/results", tags=["Results"])
+app.include_router(realtime.router, prefix="/realtime", tags=["Real-time"])
 
 
 # Root endpoint
