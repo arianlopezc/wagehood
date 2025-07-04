@@ -21,10 +21,10 @@ from src.core.models import (
 )
 from src.data.mock_generator import MockDataGenerator
 from src.strategies.ma_crossover import MovingAverageCrossover
-from src.strategies.rsi_trend import RSITrend
-from src.strategies.bollinger_breakout import BollingerBreakout
+from src.strategies.rsi_trend import RSITrendFollowing
+from src.strategies.bollinger_breakout import BollingerBandBreakout
 from src.strategies.macd_rsi import MACDRSIStrategy
-from src.strategies.sr_breakout import SRBreakout
+from src.strategies.sr_breakout import SupportResistanceBreakout
 from src.backtest.engine import BacktestEngine, BacktestConfig
 from src.services.data_service import DataService
 from src.services.backtest_service import BacktestService
@@ -210,9 +210,9 @@ def ma_crossover_strategy() -> MovingAverageCrossover:
 
 
 @pytest.fixture
-def rsi_trend_strategy() -> RSITrend:
+def rsi_trend_strategy() -> RSITrendFollowing:
     """Create RSI trend strategy."""
-    return RSITrend({
+    return RSITrendFollowing({
         'rsi_period': 14,
         'rsi_oversold': 30,
         'rsi_overbought': 70,
@@ -221,9 +221,9 @@ def rsi_trend_strategy() -> RSITrend:
 
 
 @pytest.fixture
-def bollinger_breakout_strategy() -> BollingerBreakout:
+def bollinger_breakout_strategy() -> BollingerBandBreakout:
     """Create Bollinger Breakout strategy."""
-    return BollingerBreakout({
+    return BollingerBandBreakout({
         'period': 20,
         'std_dev': 2.0,
         'min_confidence': 0.6
@@ -242,9 +242,9 @@ def macd_rsi_strategy() -> MACDRSIStrategy:
 
 
 @pytest.fixture
-def sr_breakout_strategy() -> SRBreakout:
+def sr_breakout_strategy() -> SupportResistanceBreakout:
     """Create Support/Resistance breakout strategy."""
-    return SRBreakout({
+    return SupportResistanceBreakout({
         'lookback_period': 20,
         'min_touches': 2,
         'breakout_threshold': 0.02

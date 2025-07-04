@@ -279,3 +279,239 @@ class BestStrategyResponse(BaseResponse):
     parameters: Dict[str, Any]
     metrics: BacktestMetrics
     backtest_id: str
+
+
+# Real-time data models
+class RealtimeDataPoint(BaseModel):
+    """Real-time market data point."""
+    symbol: str
+    timestamp: datetime
+    price: float
+    volume: Optional[float] = None
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    spread: Optional[float] = None
+
+
+class IndicatorValue(BaseModel):
+    """Technical indicator value."""
+    name: str
+    value: Optional[float] = None
+    values: Optional[Dict[str, float]] = None  # For multi-value indicators like MACD
+    timestamp: datetime
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class TradingSignal(BaseModel):
+    """Trading signal model."""
+    symbol: str
+    strategy: str
+    signal_type: str  # 'BUY', 'SELL', 'HOLD'
+    strength: float  # Signal strength 0-1
+    price: float
+    timestamp: datetime
+    indicators: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class RealtimeDataResponse(BaseResponse):
+    """Real-time data response model."""
+    data: List[RealtimeDataPoint]
+    count: int
+
+
+class IndicatorResponse(BaseResponse):
+    """Indicator values response model."""
+    symbol: str
+    indicators: List[IndicatorValue]
+
+
+class SignalResponse(BaseResponse):
+    """Trading signals response model."""
+    symbol: str
+    signals: List[TradingSignal]
+
+
+class WebSocketMessage(BaseModel):
+    """WebSocket message model."""
+    type: str  # 'price', 'indicator', 'signal', 'alert'
+    symbol: str
+    data: Dict[str, Any]
+    timestamp: datetime
+
+
+# Configuration management models
+class AssetConfigModel(BaseModel):
+    """Asset configuration model."""
+    symbol: str
+    enabled: bool
+    data_provider: str
+    timeframes: List[str]
+    priority: int = 1
+    last_updated: Optional[datetime] = None
+
+
+class IndicatorConfigModel(BaseModel):
+    """Indicator configuration model."""
+    name: str
+    enabled: bool
+    parameters: Dict[str, Any]
+    update_frequency_seconds: int = 1
+    ttl_seconds: int = 300
+
+
+class StrategyConfigModel(BaseModel):
+    """Strategy configuration model."""
+    name: str
+    enabled: bool
+    parameters: Dict[str, Any]
+    required_indicators: List[str]
+    update_frequency_seconds: int = 1
+    ttl_seconds: int = 600
+
+
+class SystemConfigModel(BaseModel):
+    """System configuration model."""
+    max_concurrent_calculations: int = 100
+    batch_calculation_size: int = 10
+    data_update_interval_seconds: int = 1
+    calculation_workers: int = 4
+    redis_streams_maxlen: int = 10000
+    enable_monitoring: bool = True
+    enable_alerts: bool = True
+
+
+class WatchlistRequest(BaseModel):
+    """Watchlist update request model."""
+    assets: List[AssetConfigModel]
+
+
+class WatchlistResponse(BaseResponse):
+    """Watchlist response model."""
+    assets: List[AssetConfigModel]
+
+
+class AddSymbolRequest(BaseModel):
+    """Add symbol request model."""
+    symbol: str
+    data_provider: Optional[str] = None
+    timeframes: Optional[List[str]] = None
+    priority: int = 1
+
+    @validator('symbol')
+    def validate_symbol(cls, v):
+        return v.upper().strip()
+
+
+class ConfigurationSummaryResponse(BaseResponse):
+    """Configuration summary response model."""
+    watchlist: Dict[str, Any]
+    indicators: Dict[str, Any]
+    strategies: Dict[str, Any]
+    system: Optional[Dict[str, Any]]
+    last_updated: str
+
+
+class SystemHealthResponse(BaseResponse):
+    """System health response model."""
+    status: str  # 'healthy', 'degraded', 'unhealthy'
+    uptime_seconds: Optional[float] = None
+    components: Dict[str, str]  # component_name -> status
+    statistics: Dict[str, Any]
+    alerts: List[Dict[str, Any]]
+
+
+class PerformanceMetrics(BaseModel):
+    """Performance metrics model."""
+    component: str
+    events_processed: int
+    events_per_second: float
+    errors: int
+    error_rate: float
+    memory_usage_mb: float
+    cpu_usage_percent: float
+    last_update: datetime
+
+
+class SystemStatsResponse(BaseResponse):
+    """System statistics response model."""
+    uptime_seconds: float
+    running: bool
+    configuration: Dict[str, Any]
+    ingestion: Optional[Dict[str, Any]] = None
+    calculation: Optional[Dict[str, Any]] = None
+    performance: List[PerformanceMetrics]
+
+
+class AlertModel(BaseModel):
+    """Alert model."""
+    id: str
+    type: str  # 'error', 'warning', 'info'
+    component: str
+    message: str
+    timestamp: datetime
+    acknowledged: bool = False
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class AlertsResponse(BaseResponse):
+    """Alerts response model."""
+    alerts: List[AlertModel]
+    total_count: int
+    unacknowledged_count: int
+
+
+# Data query models
+class HistoricalDataQuery(BaseModel):
+    """Historical data query model."""
+    symbol: str
+    indicator: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    limit: int = 1000
+    
+    @validator('symbol')
+    def validate_symbol(cls, v):
+        return v.upper().strip()
+
+
+class HistoricalDataResponse(BaseResponse):
+    """Historical data response model."""
+    symbol: str
+    indicator: Optional[str] = None
+    data: List[Dict[str, Any]]
+    total_count: int
+    query_params: Dict[str, Any]
+
+
+class BulkExportRequest(BaseModel):
+    """Bulk data export request model."""
+    symbols: List[str]
+    indicators: Optional[List[str]] = None
+    strategies: Optional[List[str]] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    format: str = "json"  # json, csv, parquet
+    
+    @validator('symbols')
+    def validate_symbols(cls, v):
+        return [symbol.upper().strip() for symbol in v]
+
+
+class BulkExportResponse(BaseResponse):
+    """Bulk export response model."""
+    export_id: str
+    status: str  # 'pending', 'processing', 'completed', 'failed'
+    download_url: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    records_count: Optional[int] = None
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+# Validation response models
+class ValidationResult(BaseModel):
+    """Configuration validation result."""
+    is_valid: bool
+    warnings: List[str]
+    errors: List[str]

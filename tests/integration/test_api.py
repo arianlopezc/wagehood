@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 
 from src.api.app import app
 from src.api.schemas import (
-    MarketDataRequest, BacktestRequest, AnalysisRequest,
-    StrategyComparisonRequest, ParameterOptimizationRequest
+    DataUploadRequest, BacktestRequest, IndicatorRequest,
+    StrategyComparisonRequest, OptimizationRequest
 )
 from src.core.models import MarketData, TimeFrame, BacktestResult, PerformanceMetrics
 from src.strategies.ma_crossover import MovingAverageCrossover

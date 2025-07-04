@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 from src.data.store import DataStore
 from src.data.mock_generator import MockDataGenerator, MarketScenario
-from src.data.providers.mock_provider import MockDataProvider
+from src.data.providers.mock_provider import MockProvider
 from src.core.models import OHLCV, MarketData, TimeFrame
 
 

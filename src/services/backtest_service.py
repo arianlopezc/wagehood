@@ -8,7 +8,7 @@ import asyncio
 
 from ..backtest.engine import BacktestEngine
 from ..storage.results_store import ResultsStore
-from ..core.models import TimeFrame, StrategyType
+from ..core.models import TimeFrame, StrategyStatus
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class BacktestService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameters: Dict[str, Any],
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
@@ -102,7 +102,7 @@ class BacktestService:
         self,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameters: Dict[str, Any],
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
@@ -139,7 +139,7 @@ class BacktestService:
         job_id: str,
         symbol: str,
         timeframe: TimeFrame,
-        strategy: StrategyType,
+        strategy: str,
         parameters: Dict[str, Any],
         start_date: Optional[datetime],
         end_date: Optional[datetime],
