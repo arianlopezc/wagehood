@@ -74,7 +74,8 @@ try:
         monitor_commands,
         admin_commands,
         install_commands,
-        service_commands
+        service_commands,
+        analysis_commands
     )
     from src.cli.config import CLIConfig, ConfigManager
     from src.cli.utils.logging import setup_logging
@@ -88,7 +89,8 @@ except ImportError:
         monitor_commands,
         admin_commands,
         install_commands,
-        service_commands
+        service_commands,
+        analysis_commands
     )
     from src.cli.config import CLIConfig, ConfigManager
     from src.cli.utils.logging import setup_logging
@@ -181,6 +183,7 @@ cli.add_command(data_commands)
 cli.add_command(config_commands)
 cli.add_command(monitor_commands)
 cli.add_command(admin_commands)
+cli.add_command(analysis_commands)
 
 
 @cli.command()

@@ -1,6 +1,6 @@
 # Wagehood Trading Analysis System
 
-**A professional-grade, production-ready trading analysis platform featuring real-time market data processing, 5 proven strategies, comprehensive backtesting, and advanced technical analysis. Includes a powerful global CLI tool accessible from anywhere on your system.**
+**A professional-grade, production-ready trading analysis platform featuring real-time market data processing, 5 proven strategies, comprehensive backtesting, and advanced technical analysis. Built as a powerful CLI-only system accessible from anywhere on your system.**
 
 ## 🚀 Overview
 
@@ -11,6 +11,7 @@ Wagehood is a sophisticated trading system built for systematic traders and quan
 - **5 Research-Proven Strategies** with documented win rates up to 73%
 - **Real-Time Market Data Processing** with sub-second updates
 - **Global CLI Interface** - Run `wagehood` from anywhere with 50+ commands
+- **Strategy Analysis & Optimization** - Analyze which strategies work best for your trading style
 - **Comprehensive CLI Interface** with installation, configuration, and service management
 - **Production-Ready Architecture** with Redis Streams, authentication, and monitoring
 - **Alpaca Markets Integration** for live trading and commission-free execution
@@ -55,8 +56,8 @@ Wagehood is a sophisticated trading system built for systematic traders and quan
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Global CLI      │◀───│ Service         │◀───│ Trading         │
-│ (wagehood)      │    │ Management      │    │ Operations      │
+│ CLI Interface   │◀───│ Data Services   │◀───│ Analysis &      │
+│ (wagehood)      │    │ & Storage       │    │ Backtesting     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -110,7 +111,7 @@ src/
 
 ### Prerequisites
 
-1. **Python 3.11+** 
+1. **Python 3.9+** 
 2. **Redis Server** (for real-time processing)
 3. **Alpaca Markets Account** (optional, for live data/trading)
 
@@ -228,10 +229,16 @@ wagehood install setup
 # 2. Check that everything is configured correctly
 wagehood install status
 
-# 3. Start the trading system
-wagehood install start
+# 3. Start the real-time data processing (optional)
+wagehood install start --realtime-only
 
-# 4. Monitor system performance
+# 4. Test with market data
+wagehood data latest SPY
+
+# 5. Analyze which strategies work best for your trading style
+wagehood analyze strategy-effectiveness SPY
+
+# 6. Monitor system performance
 wagehood monitor health
 ```
 
@@ -298,18 +305,24 @@ wagehood monitor stats
 
 #### Data Commands
 ```bash
-# Latest market data and indicators
-wagehood data latest SPY --indicators --signals
+# Latest market data
+wagehood data latest SPY
+
+# Get indicators for a symbol
+wagehood data indicators SPY -i sma_20 -i rsi
+
+# Get trading signals
+wagehood data signals SPY --strategy ma_crossover
 
 # Real-time streaming
-wagehood data stream SPY QQQ --indicators --duration 300
+wagehood data stream SPY QQQ --duration 300
 
 # Historical data with date filtering
-wagehood data historical AAPL --start 2024-01-01 --indicators "sma_50,rsi_14"
+wagehood data historical AAPL --start-date 2024-01-01 --indicator sma_20
 
 # Export data in multiple formats
-wagehood data export create SPY --format csv --start 2024-01-01
-wagehood data export download exp_123456 spy_data.csv
+wagehood data export create SPY --format csv --start-date 2024-01-01
+wagehood data export download exp_123456
 ```
 
 #### Configuration Commands
@@ -325,11 +338,11 @@ wagehood config indicators update new_indicators.json
 
 # Strategy configuration
 wagehood config strategies show
-wagehood config strategies disable bollinger_breakout_strategy
+wagehood config strategies update updated_strategies.json
 
 # CLI settings
-wagehood config cli set output.format json
-wagehood config cli set log.level INFO
+wagehood config set --output-format json
+wagehood config set --log-level INFO
 ```
 
 #### Monitoring Commands
@@ -351,28 +364,45 @@ wagehood monitor live --components ingestion,calculation
 wagehood monitor ping --count 10 --interval 1
 ```
 
+#### Analysis Commands
+```bash
+# Analyze strategy effectiveness for a symbol
+wagehood analyze strategy-effectiveness SPY
+wagehood analyze strategy-effectiveness AAPL --period 6m --format json
+
+# Compare specific strategies
+wagehood analyze compare-strategies ma_crossover macd_rsi bollinger_breakout
+wagehood analyze compare-strategies macd_rsi rsi_trend --symbol TSLA
+
+# List all available strategies
+wagehood analyze list-strategies
+wagehood analyze list-strategies --format json
+
+# Test with mock data for development
+wagehood analyze strategy-effectiveness SPY --use-mock-data
+```
+
 #### Administrative Commands
 ```bash
 # Service management
-wagehood install start --background
-wagehood install start --log-level DEBUG
+wagehood install start --realtime-only
+wagehood install start --host 0.0.0.0 --port 8080
 wagehood admin service status
 
 # Cache management
-wagehood admin cache clear indicators
-wagehood admin cache stats
+wagehood admin cache clear --type data
+wagehood admin cache clear --type all
 
 # Log management
 wagehood admin logs show --level ERROR --limit 100
-wagehood admin logs follow
+wagehood admin logs show --component ingestion
 
 # Backup & restore
-wagehood admin backup create --description "Pre-upgrade backup"
+wagehood admin backup create
 wagehood admin backup restore backup_20240101_120000
 
 # Maintenance tasks
-wagehood admin maintenance cleanup
-wagehood admin maintenance full --confirm
+wagehood admin maintenance run
 ```
 
 ### Output Formats
@@ -394,6 +424,205 @@ wagehood data latest SPY -f json
 wagehood data latest SPY QQQ -f csv
 ```
 
+## 📊 Strategy Analysis
+
+### Overview
+
+The Strategy Analysis feature is one of Wagehood's most powerful capabilities, designed to help traders determine which strategies work best for their specific trading style and market conditions. It analyzes all available strategies across three distinct trading styles and provides actionable recommendations based on comprehensive performance metrics.
+
+### Trading Styles Analyzed
+
+**Day Trading (Short-term, High Frequency)**
+- Hold time: Less than 24 hours
+- Focus: High-frequency signals, consistent small wins
+- Best for: Active traders who can monitor positions throughout the day
+- Preferred metrics: High win rate, frequent signals, low drawdown
+
+**Swing Trading (Medium-term, 1-10 days)**
+- Hold time: 1-10 days
+- Focus: Capturing medium-term price movements
+- Best for: Part-time traders who check positions daily
+- Preferred metrics: Balanced win rate and return per trade
+
+**Position Trading (Long-term, >10 days)**
+- Hold time: More than 10 days
+- Focus: Major trend following with higher returns per trade
+- Best for: Buy-and-hold investors with patience for larger moves
+- Preferred metrics: Higher returns per trade, lower frequency
+
+### Key Metrics Analyzed
+
+**Performance Metrics:**
+- **Win Rate**: Percentage of profitable trades
+- **Average Return per Trade**: Expected profit/loss per signal
+- **Profit Factor**: Ratio of gross profit to gross loss
+- **Maximum Drawdown**: Worst peak-to-trough decline
+- **Sharpe Ratio**: Risk-adjusted returns
+- **Total Return**: Overall portfolio performance
+
+**Trading Characteristics:**
+- **Number of Signals**: Frequency of trading opportunities
+- **Average Hold Time**: How long positions are typically held
+- **Style Fit Rating**: Overall suitability (Excellent/Good/Fair/Poor)
+- **Recommendation Score**: Composite score (0-1) for each trading style
+
+### Available Analysis Commands
+
+#### 1. Strategy Effectiveness Analysis
+```bash
+# Analyze all strategies for a symbol
+wagehood analyze strategy-effectiveness SPY
+
+# Analyze specific strategies
+wagehood analyze strategy-effectiveness AAPL --strategies ma_crossover macd_rsi
+
+# Use different time periods
+wagehood analyze strategy-effectiveness TSLA --period 6m
+wagehood analyze strategy-effectiveness QQQ --period 2y
+
+# Get JSON output for programmatic use
+wagehood analyze strategy-effectiveness SPY --format json
+
+# Test with mock data (development)
+wagehood analyze strategy-effectiveness SPY --use-mock-data
+```
+
+#### 2. Strategy Comparison
+```bash
+# Compare 2-5 specific strategies
+wagehood analyze compare-strategies ma_crossover macd_rsi
+
+# Compare with different symbol/period
+wagehood analyze compare-strategies macd_rsi rsi_trend bollinger_breakout --symbol AAPL --period 1y
+
+# Get detailed comparison in JSON format
+wagehood analyze compare-strategies ma_crossover macd_rsi --format json
+```
+
+#### 3. List Available Strategies
+```bash
+# Show all strategies with metadata
+wagehood analyze list-strategies
+
+# Get machine-readable output
+wagehood analyze list-strategies --format json
+```
+
+### Interpreting Results
+
+#### Summary Table
+The results start with a summary table showing:
+- **Overall Score**: Best recommendation score across all trading styles
+- **Best Style**: Recommended trading style for each strategy
+- **Style Indicators**: Visual indicators for each style (●=Excellent, ●=Good, ●=Fair, ●=Poor)
+
+#### Detailed Analysis
+For the top-performing strategies, detailed metrics are shown:
+
+```
+Strategy: MACD+RSI Combined - SPY
+┌─────────────────────┬─────────────┬──────────────┬──────────────────┐
+│ Metric              │ Day Trading │ Swing Trading│ Position Trading │
+├─────────────────────┼─────────────┼──────────────┼──────────────────┤
+│ Win Rate            │ 68.5%       │ 73.2%        │ 71.8%            │
+│ Avg Return/Trade    │ 0.64%       │ 0.88%        │ 1.24%            │
+│ Profit Factor       │ 1.89        │ 2.14         │ 2.03             │
+│ Num Signals         │ 124         │ 67           │ 23               │
+│ Avg Hold Time       │ 18.5h       │ 4.2 days     │ 18.7 days        │
+│ Recommendation      │ 0.72 (Good) │ 0.85 (Excellent) │ 0.78 (Good) │
+└─────────────────────┴─────────────┴──────────────┴──────────────────┘
+
+Recommendation: Best Trading Style: Swing Trading
+Style Fit: Excellent
+Expected Win Rate: 73.2%
+Expected Return/Trade: 0.88%
+Signals per Year: 67
+Average Hold Time: 4.2 days
+```
+
+#### Recommendation Guidelines
+
+**Excellent (0.8-1.0)**: Highly recommended for this trading style
+- Strategy shows strong performance across multiple metrics
+- Well-suited for the time horizon and risk profile
+- Expected to generate consistent returns
+
+**Good (0.6-0.8)**: Recommended with some considerations
+- Solid performance with minor areas for improvement
+- Good fit for the trading style with reasonable expectations
+- May require additional risk management
+
+**Fair (0.4-0.6)**: Acceptable but not optimal
+- Mixed performance that may work in certain market conditions
+- Consider combining with other strategies or indicators
+- Higher risk or lower consistency expected
+
+**Poor (0.0-0.4)**: Not recommended for this trading style
+- Strategy doesn't align well with the time horizon
+- Inconsistent performance or unfavorable metrics
+- Consider alternative strategies or different time frames
+
+### Usage Examples
+
+#### Example 1: Finding the Best Strategy for SPY
+```bash
+$ wagehood analyze strategy-effectiveness SPY
+
+Strategy Effectiveness Analysis for SPY
+Analysis Period: 1y
+Strategies Analyzed: 5
+Data Source: Alpaca Markets
+
+Summary Recommendations:
+1. MACD+RSI Combined - Best for Swing Trading
+   Win Rate: 73.2%, Avg Return: 0.88%, Signals: 67
+2. RSI Trend Following - Best for Day Trading
+   Win Rate: 71.5%, Avg Return: 0.62%, Signals: 89
+3. Bollinger Band Breakout - Best for Position Trading
+   Win Rate: 68.9%, Avg Return: 1.15%, Signals: 34
+```
+
+#### Example 2: Comparing Momentum Strategies
+```bash
+$ wagehood analyze compare-strategies macd_rsi rsi_trend --symbol AAPL
+
+# This will show a direct comparison of the two momentum-based strategies
+# highlighting which performs better for different trading styles
+```
+
+#### Example 3: Development and Testing
+```bash
+# Test analysis with mock data during development
+$ wagehood analyze strategy-effectiveness SPY --use-mock-data
+
+# This generates realistic market data for testing without API calls
+```
+
+### Best Practices
+
+1. **Start with Broad Analysis**: Use `strategy-effectiveness` to get an overview
+2. **Narrow Down**: Use `compare-strategies` for detailed comparisons
+3. **Consider Your Style**: Choose strategies that match your available time and risk tolerance
+4. **Validate Results**: Test with different symbols and time periods
+5. **Paper Trade First**: Always validate strategies with paper trading before live implementation
+6. **Monitor Performance**: Regularly re-analyze as market conditions change
+
+### Integration with Backtesting
+
+The analysis results can be used to configure backtesting parameters:
+
+```python
+# Based on analysis results, configure backtest
+from src.strategies import MACDRSIStrategy
+from src.backtest import BacktestEngine
+
+# Use the recommended strategy
+strategy = MACDRSIStrategy()
+engine = BacktestEngine()
+
+# Configure based on analysis (e.g., swing trading parameters)
+result = engine.run_backtest(strategy, data, initial_capital=10000)
+```
 
 ## 🔗 Alpaca Markets Integration
 
@@ -568,6 +797,10 @@ output:
   use_color: true
   max_width: 120
   
+data:
+  cache_enabled: true
+  cache_ttl: 300
+  
 streaming:
   buffer_size: 1000
   reconnect_delay: 5
@@ -595,13 +828,13 @@ logging:
 - **Circuit Breakers**: Fault tolerance for external data feeds
 - **Horizontal Scaling**: Add workers for more symbols
 
-### Trading Performance
+### CLI Performance
 
 - **Market Data**: <50ms from market to system
-- **Order Execution**: ~100-500ms for market orders (Alpaca)
-- **CLI Commands**: <10ms for account/position queries
+- **Data Queries**: <10ms for cached data, <100ms for fresh data
+- **CLI Commands**: <10ms for local operations
 - **Stream Processing**: <10ms through Redis pipeline
-- **Rate Limiting**: 200 requests/minute per Alpaca API
+- **Analysis Operations**: <1s for standard backtests
 
 ### Scalability
 
@@ -672,7 +905,7 @@ pytest tests/integration/ -v
 ### Docker Deployment
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 COPY requirements.txt .
@@ -821,8 +1054,8 @@ wagehood monitor ping
 # Check if services are running
 wagehood install status
 
-# Start trading system
-wagehood install start
+# Start real-time processing
+wagehood install start --realtime-only
 ```
 
 #### No Data Processing

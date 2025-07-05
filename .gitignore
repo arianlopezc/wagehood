@@ -275,10 +275,5 @@ temp/
 .ruff_cache/
 .coverage_cache/
 
-# Local development
-.local/
-local/
-*.local
-
 # Project specific
-# Add any project-specific files or directories to ignore below
+# Add any project-specific files or directories to ignore below.local/
