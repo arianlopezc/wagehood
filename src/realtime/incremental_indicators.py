@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import math
 
-from ..core.constants import (
+from src.core.constants import (
     RSI_PERIOD, RSI_OVERBOUGHT, RSI_OVERSOLD,
     MACD_FAST, MACD_SLOW, MACD_SIGNAL,
     BB_PERIOD, BB_STD_DEV,

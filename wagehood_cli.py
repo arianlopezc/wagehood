@@ -3,27 +3,62 @@
 Wagehood CLI - Command Line Interface for Real-time Trading System
 
 A comprehensive CLI tool for interacting with the Wagehood real-time market data
-processing API. Provides commands for data retrieval, configuration management,
-system monitoring, and administrative tasks.
+processing API. Provides complete system management including installation, 
+configuration, data retrieval, monitoring, and administrative tasks.
 
 Usage:
     wagehood [OPTIONS] COMMAND [ARGS]...
 
-Examples:
+Quick Start:
+    # Install and setup the system
+    wagehood install setup
+
+    # Check system status
+    wagehood install status
+
+    # Start services
+    wagehood install start
+
+Data Operations:
     # Get latest data for a symbol
     wagehood data latest SPY
 
     # Stream real-time data
     wagehood data stream SPY QQQ --duration 60
 
+    # Export historical data
+    wagehood data export --symbols SPY,QQQ --start 2024-01-01 --format csv
+
+Configuration:
     # Add symbols to watchlist
     wagehood config watchlist add AAPL TSLA NVDA
 
+    # Update configuration
+    wagehood install configure
+
+    # Show current configuration
+    wagehood config show
+
+System Management:
     # Check system health
     wagehood monitor health
 
-    # Export historical data
-    wagehood data export --symbols SPY,QQQ --start 2024-01-01 --format csv
+    # Restart services
+    wagehood install restart
+
+    # Stop services
+    wagehood install stop
+
+Service Management:
+    # Install auto-start service
+    wagehood service install
+
+    # Check service status
+    wagehood service status
+
+    # Enable/disable auto-start
+    wagehood service enable
+    wagehood service disable
 """
 
 import click
@@ -31,18 +66,33 @@ import sys
 import os
 from pathlib import Path
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
-
-from src.cli.commands import (
-    data_commands,
-    config_commands,
-    monitor_commands,
-    admin_commands
-)
-from src.cli.config import CLIConfig, ConfigManager
-from src.cli.utils.logging import setup_logging
-from src.cli.utils.output import OutputFormatter
+# Try to import from installed package first, fallback to local development
+try:
+    from src.cli.commands import (
+        data_commands,
+        config_commands,
+        monitor_commands,
+        admin_commands,
+        install_commands,
+        service_commands
+    )
+    from src.cli.config import CLIConfig, ConfigManager
+    from src.cli.utils.logging import setup_logging
+    from src.cli.utils.output import OutputFormatter
+except ImportError:
+    # Add src to path for local development
+    sys.path.insert(0, str(Path(__file__).parent / "src"))
+    from src.cli.commands import (
+        data_commands,
+        config_commands,
+        monitor_commands,
+        admin_commands,
+        install_commands,
+        service_commands
+    )
+    from src.cli.config import CLIConfig, ConfigManager
+    from src.cli.utils.logging import setup_logging
+    from src.cli.utils.output import OutputFormatter
 from rich.console import Console
 
 # CLI Configuration
@@ -77,9 +127,11 @@ def cli(ctx, api_url, config, output_format, verbose, quiet, no_color):
     """
     Wagehood CLI - Real-time Trading System Interface
     
-    A comprehensive command-line tool for interacting with the Wagehood
-    real-time market data processing system. Manage configurations,
-    monitor system health, and access real-time market data.
+    A comprehensive command-line tool for the Wagehood real-time market data
+    processing system. Features complete system management including installation,
+    configuration, data access, monitoring, and service management.
+    
+    Get started by running: wagehood install setup
     """
     # Create console
     console = Console(no_color=no_color)
@@ -123,6 +175,8 @@ def cli(ctx, api_url, config, output_format, verbose, quiet, no_color):
 
 
 # Register command groups
+cli.add_command(install_commands)
+cli.add_command(service_commands)
 cli.add_command(data_commands)
 cli.add_command(config_commands)
 cli.add_command(monitor_commands)
@@ -138,6 +192,7 @@ def info(ctx):
     
     info_data = {
         'CLI Version': '1.0.0',
+        'Environment': config.environment,
         'API URL': config.api_url,
         'WebSocket URL': config.ws_url,
         'Config File': config.config_file,
@@ -149,6 +204,52 @@ def info(ctx):
     
     formatter.print_header("Wagehood CLI Information")
     formatter.print_key_value_pairs(info_data)
+
+
+@cli.command()
+@click.pass_context
+def getting_started(ctx):
+    """Display getting started guide and setup instructions"""
+    console = ctx.obj['console']
+    
+    from rich.panel import Panel
+    from rich.text import Text
+    
+    console.print(Panel.fit(
+        Text.from_markup(
+            "[bold green]Welcome to Wagehood CLI![/bold green]\n\n"
+            "[bold]Getting Started Guide[/bold]\n\n"
+            "[yellow]1. First-time Setup[/yellow]\n"
+            "   Run the interactive installation wizard:\n"
+            "   [cyan]wagehood install setup[/cyan]\n\n"
+            "[yellow]2. Check System Status[/yellow]\n"
+            "   Verify your installation and configuration:\n"
+            "   [cyan]wagehood install status[/cyan]\n\n"
+            "[yellow]3. Start Services[/yellow]\n"
+            "   Launch the API server and real-time processor:\n"
+            "   [cyan]wagehood install start[/cyan]\n\n"
+            "[yellow]4. Explore Data[/yellow]\n"
+            "   Get latest market data:\n"
+            "   [cyan]wagehood data latest SPY[/cyan]\n\n"
+            "[yellow]5. Configure Watchlist[/yellow]\n"
+            "   Add symbols to track:\n"
+            "   [cyan]wagehood config watchlist add AAPL TSLA[/cyan]\n\n"
+            "[bold]Common Commands[/bold]\n"
+            "• [cyan]wagehood install --help[/cyan] - Installation and service management\n"
+            "• [cyan]wagehood service --help[/cyan] - Auto-start service management\n"
+            "• [cyan]wagehood config --help[/cyan] - Configuration management\n"
+            "• [cyan]wagehood data --help[/cyan] - Data operations\n"
+            "• [cyan]wagehood monitor --help[/cyan] - System monitoring\n"
+            "• [cyan]wagehood --help[/cyan] - Show all available commands\n\n"
+            "[bold]Prerequisites[/bold]\n"
+            "• Alpaca Markets account (free paper trading)\n"
+            "• Redis server (for real-time data)\n"
+            "• Python 3.8+ with required packages\n\n"
+            "[dim]For detailed documentation, visit: https://github.com/your-repo/wagehood[/dim]"
+        ),
+        title="🚀 Wagehood CLI",
+        padding=(1, 2)
+    ))
 
 
 @cli.command()

@@ -1,11 +1,15 @@
 """Core data models for the trading system"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, TYPE_CHECKING
+import sys
 
 # Optional numpy import for performance
+if TYPE_CHECKING:
+    import numpy as np
+
 try:
     import numpy as np
     HAS_NUMPY = True
@@ -25,9 +29,10 @@ class OHLCV:
 
     def __post_init__(self):
         """Validate OHLCV data integrity"""
-        if self.high < max(self.open, self.close, self.low):
+        # Use single pass validation for performance
+        if self.high < self.open or self.high < self.close or self.high < self.low:
             raise ValueError("High must be >= max(open, close, low)")
-        if self.low > min(self.open, self.close, self.high):
+        if self.low > self.open or self.low > self.close or self.low > self.high:
             raise ValueError("Low must be <= min(open, close, high)")
         if self.volume < 0:
             raise ValueError("Volume cannot be negative")
@@ -51,7 +56,7 @@ class Signal:
     price: float
     confidence: float  # 0.0 to 1.0
     strategy_name: str
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate signal data"""
@@ -74,12 +79,7 @@ class Trade:
     pnl: Optional[float]
     commission: float = 0.0  # Default to commission-free trading
     strategy_name: str = ""
-    signal_metadata: Dict[str, Any] = None
-
-    def __post_init__(self):
-        """Initialize default values"""
-        if self.signal_metadata is None:
-            self.signal_metadata = {}
+    signal_metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_open(self) -> bool:
@@ -96,10 +96,12 @@ class Trade:
     def calculate_pnl(self, current_price: Optional[float] = None) -> float:
         """Calculate P&L for the trade"""
         if self.exit_price is not None:
-            # Closed trade
-            return (self.exit_price - self.entry_price) * self.quantity - self.commission
+            # Closed trade - cache the result in pnl field
+            if self.pnl is None:
+                self.pnl = (self.exit_price - self.entry_price) * self.quantity - self.commission
+            return self.pnl
         elif current_price is not None:
-            # Open trade
+            # Open trade - always calculate fresh
             return (current_price - self.entry_price) * self.quantity
         else:
             return 0.0
@@ -165,45 +167,73 @@ class MarketData:
     indicators: Dict[str, Union[List, 'np.ndarray']]
     last_updated: datetime
 
-    def to_arrays(self):
+    def to_arrays(self) -> Dict[str, Union[List, 'np.ndarray']]:
         """Convert OHLCV data to arrays for calculations"""
         if not self.data:
-            if HAS_NUMPY:
-                return {
-                    'timestamp': np.array([]),
-                    'open': np.array([]),
-                    'high': np.array([]),
-                    'low': np.array([]),
-                    'close': np.array([]),
-                    'volume': np.array([])
-                }
-            else:
-                return {
-                    'timestamp': [],
-                    'open': [],
-                    'high': [],
-                    'low': [],
-                    'close': [],
-                    'volume': []
-                }
+            empty_array = np.array([]) if HAS_NUMPY else []
+            return {
+                'timestamp': empty_array.copy() if HAS_NUMPY else [],
+                'open': empty_array.copy() if HAS_NUMPY else [],
+                'high': empty_array.copy() if HAS_NUMPY else [],
+                'low': empty_array.copy() if HAS_NUMPY else [],
+                'close': empty_array.copy() if HAS_NUMPY else [],
+                'volume': empty_array.copy() if HAS_NUMPY else []
+            }
+        
+        # Pre-allocate arrays for better performance
+        size = len(self.data)
         
         if HAS_NUMPY:
+            # Pre-allocate numpy arrays
+            timestamps = np.empty(size, dtype=object)
+            opens = np.empty(size, dtype=np.float64)
+            highs = np.empty(size, dtype=np.float64)
+            lows = np.empty(size, dtype=np.float64)
+            closes = np.empty(size, dtype=np.float64)
+            volumes = np.empty(size, dtype=np.float64)
+            
+            # Fill arrays using vectorized assignment
+            for i, d in enumerate(self.data):
+                timestamps[i] = d.timestamp
+                opens[i] = d.open
+                highs[i] = d.high
+                lows[i] = d.low
+                closes[i] = d.close
+                volumes[i] = d.volume
+            
             return {
-                'timestamp': np.array([d.timestamp for d in self.data]),
-                'open': np.array([d.open for d in self.data]),
-                'high': np.array([d.high for d in self.data]),
-                'low': np.array([d.low for d in self.data]),
-                'close': np.array([d.close for d in self.data]),
-                'volume': np.array([d.volume for d in self.data])
+                'timestamp': timestamps,
+                'open': opens,
+                'high': highs,
+                'low': lows,
+                'close': closes,
+                'volume': volumes
             }
         else:
+            # Pre-allocate lists
+            timestamps = [None] * size
+            opens = [None] * size
+            highs = [None] * size
+            lows = [None] * size
+            closes = [None] * size
+            volumes = [None] * size
+            
+            # Fill lists
+            for i, d in enumerate(self.data):
+                timestamps[i] = d.timestamp
+                opens[i] = d.open
+                highs[i] = d.high
+                lows[i] = d.low
+                closes[i] = d.close
+                volumes[i] = d.volume
+            
             return {
-                'timestamp': [d.timestamp for d in self.data],
-                'open': [d.open for d in self.data],
-                'high': [d.high for d in self.data],
-                'low': [d.low for d in self.data],
-                'close': [d.close for d in self.data],
-                'volume': [d.volume for d in self.data]
+                'timestamp': timestamps,
+                'open': opens,
+                'high': highs,
+                'low': lows,
+                'close': closes,
+                'volume': volumes
             }
 
 
@@ -227,3 +257,10 @@ class StrategyConfig:
     status: StrategyStatus
     created_at: datetime
     updated_at: datetime
+    
+    def __post_init__(self):
+        """Validate configuration"""
+        if self.max_positions < 0:
+            raise ValueError("max_positions must be non-negative")
+        if not 0.0 <= self.risk_per_trade <= 1.0:
+            raise ValueError("risk_per_trade must be between 0.0 and 1.0")

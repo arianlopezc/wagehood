@@ -23,10 +23,15 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
-from ..storage.cache import cache_manager
-from ..data.providers.mock_provider import MockProvider
-from ..core.models import OHLCV
-from .config_manager import ConfigManager, AssetConfig
+from src.storage.cache import cache_manager
+from src.data.providers.mock_provider import MockProvider
+try:
+    from src.data.providers.alpaca_provider import AlpacaProvider
+    ALPACA_PROVIDER_AVAILABLE = True
+except ImportError:
+    ALPACA_PROVIDER_AVAILABLE = False
+from src.core.models import OHLCV
+from src.realtime.config_manager import ConfigManager, AssetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +173,7 @@ class MarketDataIngestionService:
     def _initialize_redis(self):
         """Initialize Redis connection for streams."""
         try:
-            from ..core.constants import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
+            from src.core.constants import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
             
             self._redis_client = redis.Redis(
                 host=REDIS_HOST,

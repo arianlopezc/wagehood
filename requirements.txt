@@ -3,10 +3,6 @@ numpy>=1.24.0
 pandas>=2.0.0
 scipy>=1.10.0
 
-# API Framework
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
 
 # Data & Analysis
 python-dateutil>=2.8.0
@@ -27,6 +23,9 @@ numba>=0.58.0  # JIT compilation for speed
 # Real-time Processing & Caching
 redis>=5.0.0  # Distributed cache backend and streaming
 celery>=5.3.0  # Distributed task queue for real-time processing
+
+# Market Data & Trading
+alpaca-py>=0.42.0  # Official Alpaca Markets Python SDK
 
 # CLI Interface
 click>=8.1.0  # Command-line interface framework

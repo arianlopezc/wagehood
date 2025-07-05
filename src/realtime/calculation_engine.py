@@ -11,9 +11,10 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Callable, Tuple
+from typing import Dict, List, Optional, Any, Callable, Tuple, Set
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from functools import lru_cache
 
 try:
     import redis
@@ -21,10 +22,10 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
-from ..storage.cache import cache_manager
-from .config_manager import ConfigManager, IndicatorConfig, StrategyConfig
-from .incremental_indicators import IncrementalIndicatorCalculator
-from .data_ingestion import MarketDataIngestionService
+from src.storage.cache import cache_manager
+from src.realtime.config_manager import ConfigManager, IndicatorConfig, StrategyConfig
+from src.realtime.incremental_indicators import IncrementalIndicatorCalculator
+from src.realtime.data_ingestion import MarketDataIngestionService
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,8 @@ class CalculationEngine:
         self._tasks = []
         self._executor = ThreadPoolExecutor(max_workers=4)
         
-        # Performance tracking
+        # Performance tracking with thread-safe counters
+        self._stats_lock = threading.Lock()
         self._stats = {
             "calculations_performed": 0,
             "signals_generated": 0,
@@ -69,6 +71,11 @@ class CalculationEngine:
             "indicators_calculated": {},
             "strategies_processed": {}
         }
+        
+        # Batch processing buffer
+        self._message_buffer: List[Tuple[str, Dict]] = []
+        self._buffer_lock = threading.Lock()
+        self._last_buffer_flush = time.time()
         
         # Consumer tracking
         self._last_message_ids = {}
@@ -174,26 +181,39 @@ class CalculationEngine:
                 if "BUSYGROUP" not in str(e):
                     raise e
             
+            # Adaptive batch size based on load
+            batch_size = 10
+            max_batch_size = 100
+            min_batch_size = 5
+            
             while self._running:
                 try:
-                    # Read from stream
+                    # Read from stream with adaptive batching
                     messages = self._redis_client.xreadgroup(
                         consumer_group,
                         consumer_name,
                         {stream_name: '>'},
-                        count=10,  # Process in batches
+                        count=batch_size,
                         block=1000  # 1 second timeout
                     )
                     
                     if messages:
+                        processing_start = time.time()
                         await self._process_market_data_messages(messages[0][1])
+                        processing_time = time.time() - processing_start
+                        
+                        # Adjust batch size based on processing time
+                        if processing_time < 0.5 and batch_size < max_batch_size:
+                            batch_size = min(batch_size + 5, max_batch_size)
+                        elif processing_time > 2.0 and batch_size > min_batch_size:
+                            batch_size = max(batch_size - 5, min_batch_size)
                     
                 except redis.exceptions.ConnectionError as e:
                     logger.error(f"Redis connection error in stream consumer: {e}")
                     await asyncio.sleep(5)  # Wait before retrying
                 except Exception as e:
                     logger.error(f"Error in stream consumer: {e}")
-                    self._stats["errors"] += 1
+                    self._increment_error_count()
                     await asyncio.sleep(1)
         
         except asyncio.CancelledError:
@@ -209,12 +229,23 @@ class CalculationEngine:
             messages: List of (message_id, message_data) tuples
         """
         try:
-            tasks = []
+            # Group messages by symbol for more efficient processing
+            symbol_messages: Dict[str, List[Tuple[str, Dict]]] = {}
+            
             for message_id, message_data in messages:
-                task = asyncio.create_task(self._process_single_message(message_id, message_data))
+                symbol = message_data.get('symbol', '')
+                if symbol:
+                    if symbol not in symbol_messages:
+                        symbol_messages[symbol] = []
+                    symbol_messages[symbol].append((message_id, message_data))
+            
+            # Process each symbol's messages together
+            tasks = []
+            for symbol, symbol_msgs in symbol_messages.items():
+                task = asyncio.create_task(self._process_symbol_batch(symbol, symbol_msgs))
                 tasks.append(task)
             
-            # Process all messages concurrently
+            # Process all symbols concurrently
             await asyncio.gather(*tasks, return_exceptions=True)
             
         except Exception as e:
@@ -274,28 +305,28 @@ class CalculationEngine:
             message_data: Additional market data
         """
         try:
-            # Get enabled indicators
-            enabled_indicators = self.config_manager.get_enabled_indicators()
+            # Get enabled indicators (cached)
+            enabled_indicators = self._get_enabled_indicators_cached()
             
             calculation_results = {}
             
-            # Calculate each enabled indicator
-            for indicator_config in enabled_indicators:
+            # Batch calculate indicators for better performance
+            indicator_batches = self._group_indicators_by_type(enabled_indicators)
+            
+            for indicator_type, configs in indicator_batches.items():
                 try:
-                    result = self._calculate_single_indicator(
-                        indicator_config, symbol, price, message_data
+                    # Calculate all indicators of the same type together
+                    batch_results = self._calculate_indicator_batch(
+                        indicator_type, configs, symbol, price, message_data
                     )
-                    if result is not None:
-                        calculation_results[indicator_config.name] = result
-                        
-                        # Update indicator stats
-                        if indicator_config.name not in self._stats["indicators_calculated"]:
-                            self._stats["indicators_calculated"][indicator_config.name] = 0
-                        self._stats["indicators_calculated"][indicator_config.name] += 1
+                    calculation_results.update(batch_results)
+                    
+                    # Update stats in batch
+                    self._update_indicator_stats(batch_results.keys())
                 
                 except Exception as e:
-                    logger.error(f"Error calculating {indicator_config.name} for {symbol}: {e}")
-                    self._stats["errors"] += 1
+                    logger.error(f"Error calculating {indicator_type} indicators for {symbol}: {e}")
+                    self._increment_error_count()
             
             # Generate trading signals
             signals = self._generate_trading_signals(symbol, calculation_results)
@@ -305,16 +336,16 @@ class CalculationEngine:
             # Store results in cache
             self._store_calculation_results(symbol, calculation_results)
             
-            # Publish calculation event
+            # Publish calculation event asynchronously
             asyncio.create_task(
                 self.ingestion_service.publish_calculation_event(symbol, calculation_results)
             )
             
-            self._stats["calculations_performed"] += 1
+            self._increment_calculation_count()
             
         except Exception as e:
             logger.error(f"Error calculating indicators for {symbol}: {e}")
-            self._stats["errors"] += 1
+            self._increment_error_count()
     
     def _calculate_single_indicator(self, indicator_config: IndicatorConfig, 
                                    symbol: str, price: float, message_data: Dict) -> Optional[Any]:
@@ -660,19 +691,20 @@ class CalculationEngine:
             logger.error(f"Error storing calculation results for {symbol}: {e}")
     
     def _update_performance_stats(self, calculation_time_ms: float):
-        """Update performance statistics."""
+        """Update performance statistics thread-safely."""
         try:
-            # Update average calculation time (exponential moving average)
-            if self._stats["average_calculation_time_ms"] == 0:
-                self._stats["average_calculation_time_ms"] = calculation_time_ms
-            else:
-                alpha = 0.1  # Smoothing factor
-                self._stats["average_calculation_time_ms"] = (
-                    alpha * calculation_time_ms + 
-                    (1 - alpha) * self._stats["average_calculation_time_ms"]
-                )
-            
-            self._stats["last_calculation_time"] = datetime.now()
+            with self._stats_lock:
+                # Update average calculation time (exponential moving average)
+                if self._stats["average_calculation_time_ms"] == 0:
+                    self._stats["average_calculation_time_ms"] = calculation_time_ms
+                else:
+                    alpha = 0.1  # Smoothing factor
+                    self._stats["average_calculation_time_ms"] = (
+                        alpha * calculation_time_ms + 
+                        (1 - alpha) * self._stats["average_calculation_time_ms"]
+                    )
+                
+                self._stats["last_calculation_time"] = datetime.now()
             
         except Exception as e:
             logger.error(f"Error updating performance stats: {e}")
@@ -720,11 +752,15 @@ class CalculationEngine:
         Returns:
             Dictionary with performance statistics
         """
+        with self._stats_lock:
+            # Create a copy to avoid modification during read
+            stats_copy = self._stats.copy()
+            stats_copy["symbols_processed"] = list(self._stats["symbols_processed"])
+            
         return {
-            **self._stats,
+            **stats_copy,
             "running": self._running,
             "active_tasks": len(self._tasks),
-            "symbols_processed": list(self._stats["symbols_processed"]),
             "indicator_calculator_state": self.indicator_calculator.get_state_summary()
         }
     
@@ -756,6 +792,86 @@ class CalculationEngine:
             
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+    
+    # Performance optimization helper methods
+    
+    @lru_cache(maxsize=1)
+    def _get_enabled_indicators_cached(self):
+        """Get enabled indicators with caching."""
+        return self.config_manager.get_enabled_indicators()
+    
+    def _group_indicators_by_type(self, indicators: List) -> Dict[str, List]:
+        """Group indicators by their type for batch processing."""
+        grouped = {}
+        for indicator in indicators:
+            # Extract base type (e.g., 'sma' from 'sma_50')
+            base_type = indicator.name.split('_')[0]
+            if base_type not in grouped:
+                grouped[base_type] = []
+            grouped[base_type].append(indicator)
+        return grouped
+    
+    def _calculate_indicator_batch(self, indicator_type: str, configs: List,
+                                 symbol: str, price: float, message_data: Dict) -> Dict[str, Any]:
+        """Calculate multiple indicators of the same type in batch."""
+        results = {}
+        
+        # Process all indicators of the same type together
+        for config in configs:
+            try:
+                result = self._calculate_single_indicator(config, symbol, price, message_data)
+                if result is not None:
+                    results[config.name] = result
+            except Exception as e:
+                logger.error(f"Error in batch calculation for {config.name}: {e}")
+        
+        return results
+    
+    async def _process_symbol_batch(self, symbol: str, messages: List[Tuple[str, Dict]]):
+        """Process multiple messages for the same symbol."""
+        try:
+            # Process latest price for the symbol
+            if messages:
+                # Take the most recent message
+                latest_msg_id, latest_data = messages[-1]
+                price = float(latest_data.get('price', 0))
+                
+                if price > 0:
+                    # Process in thread pool
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(
+                        self._executor,
+                        self._calculate_indicators_for_symbol,
+                        symbol,
+                        price,
+                        latest_data
+                    )
+                
+                # Acknowledge all messages for this symbol
+                for msg_id, _ in messages:
+                    self._redis_client.xack("market_data_stream", "calculation_workers", msg_id)
+                    
+        except Exception as e:
+            logger.error(f"Error processing symbol batch for {symbol}: {e}")
+            self._increment_error_count()
+    
+    def _update_indicator_stats(self, indicator_names):
+        """Update indicator statistics in batch."""
+        with self._stats_lock:
+            for name in indicator_names:
+                if name not in self._stats["indicators_calculated"]:
+                    self._stats["indicators_calculated"][name] = 0
+                self._stats["indicators_calculated"][name] += 1
+    
+    def _increment_error_count(self):
+        """Thread-safe error count increment."""
+        with self._stats_lock:
+            self._stats["errors"] += 1
+    
+    def _increment_calculation_count(self):
+        """Thread-safe calculation count increment."""
+        with self._stats_lock:
+            self._stats["calculations_performed"] += 1
 
 
 # Factory function for easy instantiation

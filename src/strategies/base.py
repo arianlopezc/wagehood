@@ -3,10 +3,20 @@ Base strategy class for all trading strategies
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional, Union, Tuple, TYPE_CHECKING
 import logging
 from datetime import datetime
-import numpy as np
+import itertools
+from functools import lru_cache
+
+if TYPE_CHECKING:
+    import numpy as np
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 from ..core.models import Signal, SignalType, MarketData, OHLCV
 from ..indicators import IndicatorCalculator
@@ -30,6 +40,9 @@ class TradingStrategy(ABC):
         self.indicator_calculator = IndicatorCalculator()
         self._last_signal_time = None
         self._current_position = None
+        # Cache for indicator calculations
+        self._indicator_cache: Dict[str, Any] = {}
+        self._cache_timestamp: Optional[datetime] = None
         
     @abstractmethod
     def generate_signals(self, data: MarketData, indicators: Dict[str, Any]) -> List[Signal]:
@@ -75,28 +88,16 @@ class TradingStrategy(ABC):
         Returns:
             List of validated signals
         """
-        validated_signals = []
-        
-        for signal in signals:
-            # Basic validation
-            if not self._validate_signal_basic(signal):
-                continue
-                
-            # Strategy-specific validation
-            if not self._validate_signal_strategy(signal):
-                continue
-                
-            validated_signals.append(signal)
-        
-        return validated_signals
+        # Use list comprehension for better performance
+        return [
+            signal for signal in signals
+            if self._validate_signal_basic(signal) and self._validate_signal_strategy(signal)
+        ]
     
     def _validate_signal_basic(self, signal: Signal) -> bool:
         """Basic signal validation"""
-        if signal.confidence < 0.1:  # Minimum confidence threshold
-            return False
-        if signal.price <= 0:
-            return False
-        return True
+        # Combined condition for better performance
+        return signal.confidence >= 0.1 and signal.price > 0
     
     def _validate_signal_strategy(self, signal: Signal) -> bool:
         """Strategy-specific signal validation - override in subclasses"""
@@ -161,17 +162,14 @@ class TradingStrategy(ABC):
         if not param_ranges:
             return [{}]
         
-        import itertools
-        
         keys = list(param_ranges.keys())
         values = list(param_ranges.values())
         
-        combinations = []
-        for combination in itertools.product(*values):
-            param_dict = dict(zip(keys, combination))
-            combinations.append(param_dict)
-        
-        return combinations
+        # Use list comprehension for better performance
+        return [
+            dict(zip(keys, combination))
+            for combination in itertools.product(*values)
+        ]
     
     def _calculate_performance_score(self, data: MarketData, metric: str) -> float:
         """Calculate performance score for optimization"""
@@ -201,63 +199,92 @@ class TradingStrategy(ABC):
     
     def _calculate_indicators(self, data: MarketData) -> Dict[str, Any]:
         """Calculate all required indicators for the strategy"""
+        # Check cache first
+        if (self._cache_timestamp and 
+            data.last_updated == self._cache_timestamp and 
+            self._indicator_cache):
+            return self._indicator_cache
+        
         indicators = {}
         required_indicators = self.get_required_indicators()
         
-        # Convert data to arrays
+        # Convert data to arrays once
         arrays = data.to_arrays()
+        close_prices = arrays['close']
+        
+        # Define indicator mapping for cleaner code
+        indicator_calculators = {
+            'sma': lambda: self._calculate_sma(close_prices),
+            'ema': lambda: self._calculate_ema(close_prices),
+            'rsi': lambda: self._calculate_rsi(close_prices),
+            'macd': lambda: self._calculate_macd(close_prices),
+            'bollinger': lambda: self._calculate_bollinger_bands(close_prices),
+            'support_resistance': lambda: self._calculate_support_resistance(arrays)
+        }
         
         for indicator in required_indicators:
-            try:
-                if indicator == 'sma':
-                    indicators['sma'] = self._calculate_sma(arrays['close'])
-                elif indicator == 'ema':
-                    indicators['ema'] = self._calculate_ema(arrays['close'])
-                elif indicator == 'rsi':
-                    indicators['rsi'] = self._calculate_rsi(arrays['close'])
-                elif indicator == 'macd':
-                    indicators['macd'] = self._calculate_macd(arrays['close'])
-                elif indicator == 'bollinger':
-                    indicators['bollinger'] = self._calculate_bollinger_bands(arrays['close'])
-                elif indicator == 'support_resistance':
-                    indicators['support_resistance'] = self._calculate_support_resistance(arrays)
-                # Add more indicators as needed
-                
-            except Exception as e:
-                logger.error(f"Error calculating {indicator}: {e}")
-                continue
+            if indicator in indicator_calculators:
+                try:
+                    indicators[indicator] = indicator_calculators[indicator]()
+                except Exception as e:
+                    logger.error(f"Error calculating {indicator}: {e}")
+                    continue
+        
+        # Update cache
+        self._indicator_cache = indicators
+        self._cache_timestamp = data.last_updated
         
         return indicators
     
-    def _calculate_sma(self, close_prices: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    @lru_cache(maxsize=32)
+    def _get_common_periods(self, indicator_type: str) -> Tuple[int, ...]:
+        """Get common periods for indicators"""
+        if indicator_type == 'sma':
+            return (20, 50, 100, 200)
+        elif indicator_type == 'ema':
+            return (12, 26, 50, 200)
+        elif indicator_type == 'rsi':
+            return (14, 21)
+        elif indicator_type == 'bollinger':
+            return (20, 50)
+        return ()
+    
+    def _calculate_sma(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
         """Calculate Simple Moving Average"""
         from ..indicators.moving_averages import calculate_sma
         
         results = {}
-        for period in [20, 50, 100, 200]:  # Common periods
-            if period <= len(close_prices):
+        data_len = len(close_prices)
+        
+        # Only calculate for periods that have enough data
+        for period in self._get_common_periods('sma'):
+            if period <= data_len:
                 results[f'sma_{period}'] = calculate_sma(close_prices, period)
         
         return results
     
-    def _calculate_ema(self, close_prices: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    def _calculate_ema(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
         """Calculate Exponential Moving Average"""
         from ..indicators.moving_averages import calculate_ema
         
         results = {}
-        for period in [12, 26, 50, 200]:  # Common periods
-            if period <= len(close_prices):
+        data_len = len(close_prices)
+        
+        for period in self._get_common_periods('ema'):
+            if period <= data_len:
                 results[f'ema_{period}'] = calculate_ema(close_prices, period)
         
         return results
     
-    def _calculate_rsi(self, close_prices: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    def _calculate_rsi(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
         """Calculate RSI"""
         from ..indicators.momentum import calculate_rsi
         
         results = {}
-        for period in [14, 21]:  # Common periods
-            if period <= len(close_prices):
+        data_len = len(close_prices)
+        
+        for period in self._get_common_periods('rsi'):
+            if period <= data_len:
                 results[f'rsi_{period}'] = calculate_rsi(close_prices, period)
         
         return results
@@ -272,13 +299,15 @@ class TradingStrategy(ABC):
         
         return {}
     
-    def _calculate_bollinger_bands(self, close_prices: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+    def _calculate_bollinger_bands(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
         """Calculate Bollinger Bands"""
         from ..indicators.volatility import calculate_bollinger_bands
         
         results = {}
-        for period in [20, 50]:  # Common periods
-            if period <= len(close_prices):
+        data_len = len(close_prices)
+        
+        for period in self._get_common_periods('bollinger'):
+            if period <= data_len:
                 results[f'bollinger_{period}'] = calculate_bollinger_bands(close_prices, period, 2.0)
         
         return results
@@ -299,8 +328,14 @@ class TradingStrategy(ABC):
         if not returns or len(returns) < 2:
             return 0.0
         
-        avg_return = np.mean(returns)
-        std_return = np.std(returns)
+        if HAS_NUMPY:
+            avg_return = np.mean(returns)
+            std_return = np.std(returns)
+        else:
+            # Pure Python fallback
+            avg_return = sum(returns) / len(returns)
+            variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
+            std_return = variance ** 0.5
         
         if std_return == 0:
             return 0.0
@@ -343,18 +378,16 @@ class TradingStrategy(ABC):
         if not signals:
             return []
         
-        arrays = data.to_arrays()
         returns = []
-        
-        # Simple implementation: assume signals are paired buy/sell
         entry_price = None
         
+        # Process signals efficiently
         for signal in signals:
             if signal.signal_type == SignalType.BUY and entry_price is None:
                 entry_price = signal.price
-            elif signal.signal_type in [SignalType.SELL, SignalType.CLOSE_LONG] and entry_price is not None:
-                return_pct = (signal.price - entry_price) / entry_price
-                returns.append(return_pct)
+            elif entry_price is not None and signal.signal_type in (SignalType.SELL, SignalType.CLOSE_LONG):
+                # Calculate return percentage
+                returns.append((signal.price - entry_price) / entry_price)
                 entry_price = None
         
         return returns
@@ -373,18 +406,23 @@ class TradingStrategy(ABC):
         if not conditions:
             return 0.0
         
+        # Use default weights if not provided
         if weights is None:
-            weights = {key: 1.0 for key in conditions.keys()}
+            total_weight = len(conditions)
+            weighted_sum = sum(conditions.values())
+        else:
+            # Calculate weighted sum and total weight in single pass
+            weighted_sum = 0.0
+            total_weight = 0.0
+            for key, value in conditions.items():
+                weight = weights.get(key, 1.0)
+                weighted_sum += value * weight
+                total_weight += weight
         
-        total_weight = sum(weights.get(key, 1.0) for key in conditions.keys())
         if total_weight == 0:
             return 0.0
         
-        weighted_sum = sum(
-            conditions[key] * weights.get(key, 1.0) 
-            for key in conditions.keys()
-        )
-        
+        # Calculate and clamp confidence
         confidence = weighted_sum / total_weight
         return max(0.0, min(1.0, confidence))  # Clamp between 0 and 1
     

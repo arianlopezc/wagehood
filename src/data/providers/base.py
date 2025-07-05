@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from ...core.models import OHLCV, TimeFrame, MarketData
+from src.core.models import OHLCV, TimeFrame, MarketData
 
 
 class DataProvider(ABC):
