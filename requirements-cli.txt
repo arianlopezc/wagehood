@@ -1,0 +1,39 @@
+# Wagehood CLI Requirements
+# Core CLI dependencies for the comprehensive command-line interface
+
+# Click - Command line interface creation toolkit
+click>=8.0.0
+
+# Rich - Rich text and beautiful formatting in the terminal
+rich>=13.0.0
+
+# Requests - HTTP library for API calls
+requests>=2.28.0
+
+# WebSockets - WebSocket client for real-time streaming
+websockets>=11.0.0
+
+# PyYAML - YAML parser and emitter
+PyYAML>=6.0
+
+# Pandas - Data manipulation and analysis (optional but recommended)
+pandas>=1.5.0
+
+# Asyncio support for Python < 3.7 (if needed)
+# async-timeout>=4.0.0
+
+# Additional utilities
+python-dateutil>=2.8.0
+tabulate>=0.9.0
+
+# Security
+cryptography>=3.4.0
+
+# Alpaca Trading API
+alpaca-trade-api>=3.0.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0
+# black>=22.0.0
+# flake8>=5.0.0

@@ -1,0 +1,193 @@
+# Project Memory - Wagehood
+
+This file contains project-specific instructions and standards for Claude Code to follow when working on this codebase.
+
+## Core Standards
+@standards/python-standards.md
+@standards/testing-guidelines.md
+
+## Project Planning
+- All project plans, design documents, and architectural decisions must be saved as markdown files in the `.local/` folder
+- Create the `.local/` folder if it doesn't exist
+- Use descriptive filenames for plan documents (e.g., `.local/feature-design.md`, `.local/refactoring-plan.md`)
+
+## All Project Commands
+
+### Testing Commands
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/[test_file.py]
+
+# Run tests with coverage report
+pytest --cov=src tests/
+
+# Run tests in verbose mode
+pytest -v
+
+# Run tests matching pattern
+pytest -k "pattern"
+```
+
+### Code Quality Commands
+```bash
+# Format all code
+black .
+
+# Check formatting without changes
+black . --check
+
+# Sort all imports
+isort .
+
+# Check import sorting without changes
+isort . --check-only
+
+# Check code style
+flake8 .
+
+# Run type checking
+mypy .
+
+# Run comprehensive linting
+pylint src/
+```
+
+### Git Review Commands (Read-Only)
+```bash
+# Show current changes
+git status
+
+# Review uncommitted changes
+git diff
+
+# Review staged changes
+git diff --staged
+
+# View recent commits
+git log --oneline -10
+
+# Show changes in last commit
+git show HEAD
+```
+
+### Virtual Environment Commands
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment (Linux/Mac)
+source venv/bin/activate
+
+# Activate virtual environment (Windows)
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Update requirements file
+pip freeze > requirements.txt
+```
+
+## Git Policy
+- **NEVER commit without explicit user approval**
+- **NEVER push to remote repository unless specifically requested**
+- Use `git status` and `git diff` to help user review changes
+- All commits must be reviewed and approved by the user
+- When user requests commits, provide clear, descriptive commit messages
+
+## Development Workflow
+1. Create feature branch from main
+2. Write tests for new functionality
+3. Implement the feature
+4. Run all quality checks (tests, formatting, linting)
+5. Ensure all checks pass before submitting PR
+6. Update documentation as needed
+
+## Problem-Solving Methodology (ADOEOR Cycle)
+When tackling any complex problem, follow the ADOEOR cycle:
+
+1. **ANALYZE** - Before writing code:
+   - Understand the current state, desired state, and constraints
+   - Identify root causes and blockers
+   - Save analysis in `.local/problem-analysis-[feature].md`
+
+2. **DECOMPOSE** - Break down complex tasks:
+   - Separate by domains (database, auth, API, frontend)
+   - Identify dependencies between components
+   - Create task breakdown in `.local/task-decomposition-[feature].md`
+
+3. **ORCHESTRATE** - Plan execution strategy:
+   - Choose execution pattern: sequential (for dependencies) or parallel (for independent tasks)
+   - Define validation checkpoints between major steps
+   - Document strategy in `.local/orchestration-plan-[feature].md`
+
+4. **EXECUTE** - Implement with validation:
+   - Complete one component fully before moving to the next
+   - Run tests after each component completion
+   - Track changes but DO NOT commit without user approval
+
+5. **OPTIMIZE** - Measure and improve:
+   - Track execution time and test results
+   - Document performance metrics in `.local/performance-metrics.md`
+   - Refactor based on bottlenecks identified
+
+6. **RECURSE** - Learn and document:
+   - Update `.local/lessons-learned.md` with insights
+   - Store successful patterns for future use
+   - Add new commands or workflows to CLAUDE.md
+
+## Task Specialization Guidelines
+Assign tasks based on domain expertise:
+- **Database tasks**: Schema changes, migrations, query optimization
+- **Auth tasks**: Authentication, authorization, security implementations
+- **API tasks**: Endpoint creation, validation, routing
+- **Testing tasks**: Test creation, coverage improvement, E2E tests
+- **Infrastructure tasks**: Caching, rate limiting, performance optimization
+
+## Validation Protocol
+Implement multi-layer validation:
+1. **Self-validation**: After each change, run relevant tests
+2. **Cross-validation**: Review changes with `git diff` (for user review)
+3. **System validation**: Run full test suite before marking task complete
+4. **Performance validation**: Check that changes don't degrade performance
+
+## Performance Tracking
+Track and document metrics:
+- Execution time for each major operation
+- Test coverage percentage changes
+- Number of tests added/modified
+- Code quality metrics (linting warnings, type errors)
+- Save metrics in `.local/metrics/[date]-[feature].md`
+
+## Failure Recovery Protocol
+When encountering failures:
+1. Document the failure in `.local/failures/[date]-[issue].md`
+2. Analyze root cause before attempting fixes
+3. Create minimal reproduction case
+4. Fix with targeted approach
+5. Add tests to prevent regression
+6. Update documentation with solution
+
+## Knowledge Persistence
+After completing any significant task:
+- Document successful patterns in `.local/patterns/[pattern-name].md`
+- Update this CLAUDE.md with new insights or commands
+- Create reusable code snippets in `.local/snippets/`
+- Maintain a `.local/architecture-decisions.md` log
+
+## Continuous Improvement
+- Review `.local/` folder weekly for optimization opportunities
+- Consolidate repeated patterns into reusable workflows
+- Update test scenarios based on discovered edge cases
+- Refine task decomposition strategies based on outcomes
+
+## User Review Checkpoints
+Always pause for user review at these points:
+- Before making any commits
+- After completing major components
+- Before running any commands that modify project structure
+- When about to make breaking changes
+- Before pushing anything to remote repositories
