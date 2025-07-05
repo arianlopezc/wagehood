@@ -13,8 +13,8 @@ from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 
-from ..storage.cache import cache_manager
-from ..core.constants import SUPPORTED_SYMBOLS
+from src.storage.cache import cache_manager
+from src.core.constants import SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ class AssetConfig:
     data_provider: str
     timeframes: List[str]
     priority: int = 1  # Higher priority = more frequent updates
+    asset_type: str = "stock"  # stock, crypto, forex
     last_updated: Optional[datetime] = None
 
 

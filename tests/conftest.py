@@ -382,15 +382,6 @@ def performance_benchmarks() -> Dict[str, float]:
     }
 
 
-@pytest.fixture
-def mock_fastapi_app():
-    """Create mock FastAPI app for testing."""
-    app = MagicMock()
-    app.state.data_service = Mock(spec=DataService)
-    app.state.backtest_service = Mock(spec=BacktestService)
-    app.state.analysis_service = Mock(spec=AnalysisService)
-    return app
-
 
 @pytest.fixture(autouse=True)
 def reset_random_state():

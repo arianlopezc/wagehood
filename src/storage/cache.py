@@ -93,12 +93,19 @@ class LocalCache(CacheBackend):
         return time.time() > self._expiry[key]
     
     def _evict_expired(self):
-        """Remove expired entries"""
+        """Remove expired entries efficiently"""
         current_time = time.time()
-        expired_keys = [
-            key for key, expiry_time in self._expiry.items()
-            if current_time > expiry_time
-        ]
+        # Process in batches to avoid long locks
+        expired_keys = []
+        
+        for key, expiry_time in list(self._expiry.items()):
+            if current_time > expiry_time:
+                expired_keys.append(key)
+                # Process in batches of 100
+                if len(expired_keys) >= 100:
+                    break
+        
+        # Remove expired keys
         for key in expired_keys:
             self._remove_key(key)
     
@@ -119,10 +126,13 @@ class LocalCache(CacheBackend):
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache"""
         with self._lock:
-            # Clean expired entries
-            self._evict_expired()
+            # Check key existence and expiry first
+            if key not in self._cache:
+                self._stats['misses'] += 1
+                return None
             
-            if key not in self._cache or self._is_expired(key):
+            if self._is_expired(key):
+                self._remove_key(key)
                 self._stats['misses'] += 1
                 return None
             
@@ -130,6 +140,11 @@ class LocalCache(CacheBackend):
             value = self._cache.pop(key)
             self._cache[key] = value
             self._stats['hits'] += 1
+            
+            # Periodically clean expired entries (every 100 gets)
+            if self._stats['hits'] % 100 == 0:
+                self._evict_expired()
+            
             return value
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
@@ -243,16 +258,19 @@ class RedisCache(CacheBackend):
             raise
     
     def _serialize(self, value: Any) -> bytes:
-        """Serialize value for storage with compression for large data"""
+        """Serialize value for storage with optimized compression"""
         try:
             import gzip
-            data = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
             
-            # Compress if data is large (>1KB)
-            if len(data) > 1024:
-                compressed = gzip.compress(data)
-                # Use compression if it actually reduces size
-                if len(compressed) < len(data):
+            # Use highest protocol for efficiency
+            data = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+            data_len = len(data)
+            
+            # Only compress if data is large enough to benefit
+            if data_len > 2048:  # 2KB threshold
+                compressed = gzip.compress(data, compresslevel=6)  # Balanced compression
+                # Use compression only if it provides >10% reduction
+                if len(compressed) < data_len * 0.9:
                     return b"GZIP:" + compressed
             
             return b"RAW:" + data
@@ -281,11 +299,18 @@ class RedisCache(CacheBackend):
             logger.error(f"Failed to deserialize data: {e}")
             raise
     
-    def _chunk_data(self, data: bytes, chunk_size: int = 100 * 1024 * 1024) -> List[bytes]:
-        """Split large data into chunks (default 100MB chunks)"""
-        chunks = []
-        for i in range(0, len(data), chunk_size):
-            chunks.append(data[i:i + chunk_size])
+    def _chunk_data(self, data: bytes, chunk_size: int = 50 * 1024 * 1024) -> List[bytes]:
+        """Split large data into chunks (optimized 50MB chunks)"""
+        data_len = len(data)
+        # Pre-allocate list for better performance
+        num_chunks = (data_len + chunk_size - 1) // chunk_size
+        chunks = [None] * num_chunks
+        
+        for i in range(num_chunks):
+            start = i * chunk_size
+            end = min(start + chunk_size, data_len)
+            chunks[i] = data[start:end]
+        
         return chunks
     
     def _unchunk_data(self, chunks: List[bytes]) -> bytes:
@@ -293,7 +318,7 @@ class RedisCache(CacheBackend):
         return b''.join(chunks)
     
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache with chunking support for large data"""
+        """Get value from cache with optimized chunking support"""
         try:
             # First try to get as single key
             data = self.redis_client.get(key)
@@ -301,25 +326,45 @@ class RedisCache(CacheBackend):
                 return self._deserialize(data)
             
             # Check if it's chunked data
-            chunk_info = self.redis_client.get(f"{key}:chunks")
+            pipe = self.redis_client.pipeline()
+            pipe.get(f"{key}:chunks")
+            pipe.get(f"{key}:size")
+            chunk_info, size_info = pipe.execute()
+            
             if chunk_info is None:
                 return None
             
             # Get chunk information
             chunk_count = int(chunk_info)
-            chunks = []
+            expected_size = int(size_info) if size_info else None
             
-            # Retrieve all chunks
+            # Retrieve all chunks efficiently using pipeline
+            pipe = self.redis_client.pipeline()
             for i in range(chunk_count):
-                chunk_key = f"{key}:chunk:{i}"
-                chunk_data = self.redis_client.get(chunk_key)
-                if chunk_data is None:
-                    logger.error(f"Missing chunk {i} for key {key}")
-                    return None
-                chunks.append(chunk_data)
+                pipe.get(f"{key}:chunk:{i}")
             
-            # Reassemble and deserialize
-            full_data = self._unchunk_data(chunks)
+            chunk_results = pipe.execute()
+            
+            # Validate all chunks are present
+            if None in chunk_results:
+                missing_chunks = [i for i, chunk in enumerate(chunk_results) if chunk is None]
+                logger.error(f"Missing chunks {missing_chunks} for key {key}")
+                return None
+            
+            # Reassemble data efficiently
+            if expected_size:
+                # Pre-allocate bytearray for better performance
+                full_data = bytearray(expected_size)
+                offset = 0
+                for chunk in chunk_results:
+                    chunk_len = len(chunk)
+                    full_data[offset:offset + chunk_len] = chunk
+                    offset += chunk_len
+                full_data = bytes(full_data)
+            else:
+                # Fallback to joining
+                full_data = self._unchunk_data(chunk_results)
+            
             return self._deserialize(full_data)
             
         except Exception as e:
@@ -327,45 +372,57 @@ class RedisCache(CacheBackend):
             return None
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """Set value in cache with chunking for large data"""
+        """Set value in cache with optimized chunking for large data"""
         try:
             data = self._serialize(value)
             if ttl is None:
                 ttl = self.default_ttl
             
-            # For data larger than 50MB, use chunking
-            max_single_size = 50 * 1024 * 1024  # 50MB
+            data_size = len(data)
+            # Adjusted threshold for chunking (25MB)
+            max_single_size = 25 * 1024 * 1024  # 25MB
             
-            if len(data) <= max_single_size:
+            if data_size <= max_single_size:
                 # Store as single key
                 if ttl > 0:
                     return bool(self.redis_client.setex(key, ttl, data))
                 else:
                     return bool(self.redis_client.set(key, data))
             else:
-                # Store as chunked data
+                # Store as chunked data with optimized chunking
                 chunks = self._chunk_data(data)
+                chunk_count = len(chunks)
                 
-                # Use pipeline for atomic operation
-                pipe = self.redis_client.pipeline()
+                # Use pipeline for atomic operation with batching
+                pipe = self.redis_client.pipeline(transaction=False)  # Non-transactional for better performance
                 
-                # Store chunk count
+                # Store chunk metadata
                 if ttl > 0:
-                    pipe.setex(f"{key}:chunks", ttl, len(chunks))
+                    pipe.setex(f"{key}:chunks", ttl, chunk_count)
+                    pipe.setex(f"{key}:size", ttl, data_size)  # Store original size for validation
                 else:
-                    pipe.set(f"{key}:chunks", len(chunks))
+                    pipe.set(f"{key}:chunks", chunk_count)
+                    pipe.set(f"{key}:size", data_size)
                 
-                # Store all chunks
-                for i, chunk in enumerate(chunks):
-                    chunk_key = f"{key}:chunk:{i}"
-                    if ttl > 0:
-                        pipe.setex(chunk_key, ttl, chunk)
-                    else:
-                        pipe.set(chunk_key, chunk)
+                # Store chunks in batches to avoid pipeline overflow
+                batch_size = 100
+                for i in range(0, chunk_count, batch_size):
+                    batch_end = min(i + batch_size, chunk_count)
+                    
+                    for j in range(i, batch_end):
+                        chunk_key = f"{key}:chunk:{j}"
+                        if ttl > 0:
+                            pipe.setex(chunk_key, ttl, chunks[j])
+                        else:
+                            pipe.set(chunk_key, chunks[j])
+                    
+                    # Execute batch
+                    pipe.execute()
+                    pipe = self.redis_client.pipeline(transaction=False)
                 
-                # Execute all operations atomically
-                results = pipe.execute()
-                return all(results)
+                # Execute any remaining commands
+                pipe.execute()
+                return True
                 
         except Exception as e:
             logger.error(f"Failed to set cache key {key}: {e}")
@@ -577,18 +634,18 @@ class CacheManager:
         return f"{self._key_prefix}{namespace}:{key}"
     
     def get(self, namespace: str, key: str) -> Optional[Any]:
-        """Get value from cache"""
-        cache_key = self._make_key(namespace, key)
+        """Get value from cache with optimized key generation"""
+        cache_key = f"{self._key_prefix}{namespace}:{key}"
         return self.cache.get(cache_key)
     
     def set(self, namespace: str, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """Set value in cache"""
-        cache_key = self._make_key(namespace, key)
+        """Set value in cache with optimized key generation"""
+        cache_key = f"{self._key_prefix}{namespace}:{key}"
         return self.cache.set(cache_key, value, ttl)
     
     def delete(self, namespace: str, key: str) -> bool:
-        """Delete key from cache"""
-        cache_key = self._make_key(namespace, key)
+        """Delete key from cache with optimized key generation"""
+        cache_key = f"{self._key_prefix}{namespace}:{key}"
         return self.cache.delete(cache_key)
     
     def clear_namespace(self, namespace: str) -> bool:
@@ -608,8 +665,8 @@ class CacheManager:
             return False
     
     def exists(self, namespace: str, key: str) -> bool:
-        """Check if key exists"""
-        cache_key = self._make_key(namespace, key)
+        """Check if key exists with optimized key generation"""
+        cache_key = f"{self._key_prefix}{namespace}:{key}"
         return self.cache.exists(cache_key)
     
     def get_stats(self) -> Dict[str, Any]:

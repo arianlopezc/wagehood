@@ -220,12 +220,18 @@ class SystemController:
     
     def start_realtime_processor(self, background: bool = False) -> None:
         """Start the real-time processor locally."""
+        # Try to use the global command first, fallback to direct script
         script_path = Path(__file__).parent.parent.parent.parent / "run_realtime.py"
         
-        if not script_path.exists():
-            raise FileNotFoundError(f"Real-time script not found: {script_path}")
-        
-        cmd = ["python", str(script_path)]
+        try:
+            # Check if wagehood global command is available
+            subprocess.run(["which", "wagehood"], check=True, capture_output=True)
+            cmd = ["wagehood", "admin", "run-realtime"]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Fallback to direct script execution
+            if not script_path.exists():
+                raise FileNotFoundError(f"Real-time script not found: {script_path}")
+            cmd = ["python", str(script_path)]
         
         if background:
             # Start in background
@@ -334,8 +340,8 @@ def info(ctx, output_format):
     Get detailed system information.
     
     Examples:
-        wagehood_cli.py admin info
-        wagehood_cli.py admin info --format table
+        wagehood admin info
+        wagehood admin info --format table
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -386,8 +392,8 @@ def start_api(ctx, port, background):
     Start the API server locally.
     
     Examples:
-        wagehood_cli.py admin service start-api
-        wagehood_cli.py admin service start-api --port 8001 --background
+        wagehood admin service start-api
+        wagehood admin service start-api --port 8001 --background
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -411,7 +417,7 @@ def stop_api(ctx):
     Stop the locally running API server.
     
     Examples:
-        wagehood_cli.py admin service stop-api
+        wagehood admin service stop-api
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -434,8 +440,8 @@ def start_realtime(ctx, background):
     Start the real-time processor locally.
     
     Examples:
-        wagehood_cli.py admin service start-realtime
-        wagehood_cli.py admin service start-realtime --background
+        wagehood admin service start-realtime
+        wagehood admin service start-realtime --background
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -459,7 +465,7 @@ def stop_realtime(ctx):
     Stop the locally running real-time processor.
     
     Examples:
-        wagehood_cli.py admin service stop-realtime
+        wagehood admin service stop-realtime
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -480,7 +486,7 @@ def status(ctx):
     Show service status.
     
     Examples:
-        wagehood_cli.py admin service status
+        wagehood admin service status
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -526,9 +532,9 @@ def clear(ctx, cache_type, confirm):
     Clear system cache.
     
     Examples:
-        wagehood_cli.py admin cache clear
-        wagehood_cli.py admin cache clear --type data
-        wagehood_cli.py admin cache clear --no-confirm
+        wagehood admin cache clear
+        wagehood admin cache clear --type data
+        wagehood admin cache clear --no-confirm
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -579,9 +585,9 @@ def show(ctx, component, level, limit, output_format):
     Show system logs.
     
     Examples:
-        wagehood_cli.py admin logs show
-        wagehood_cli.py admin logs show --component ingestion --level ERROR
-        wagehood_cli.py admin logs show --limit 50 --format table
+        wagehood admin logs show
+        wagehood admin logs show --component ingestion --level ERROR
+        wagehood admin logs show --limit 50 --format table
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -624,9 +630,9 @@ def create(ctx, backup_type):
     Create system backup.
     
     Examples:
-        wagehood_cli.py admin backup create
-        wagehood_cli.py admin backup create --type config
-        wagehood_cli.py admin backup create --type data
+        wagehood admin backup create
+        wagehood admin backup create --type config
+        wagehood admin backup create --type data
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -646,7 +652,7 @@ def create(ctx, backup_type):
         backup_id = data.get('backup_id')
         if backup_id:
             formatter.print_info(f"Backup ID: {backup_id}")
-            formatter.print_info(f"Restore with: wagehood_cli.py admin backup restore {backup_id}")
+            formatter.print_info(f"Restore with: wagehood admin backup restore {backup_id}")
         
     except requests.exceptions.RequestException as e:
         formatter.print_error(f"API request failed: {e}")
@@ -666,8 +672,8 @@ def list(ctx, output_format):
     List available backups.
     
     Examples:
-        wagehood_cli.py admin backup list
-        wagehood_cli.py admin backup list --format table
+        wagehood admin backup list
+        wagehood admin backup list --format table
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -705,8 +711,8 @@ def restore(ctx, backup_id, confirm):
     BACKUP_ID: ID of the backup to restore
     
     Examples:
-        wagehood_cli.py admin backup restore abc123
-        wagehood_cli.py admin backup restore abc123 --no-confirm
+        wagehood admin backup restore abc123
+        wagehood admin backup restore abc123 --no-confirm
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -751,9 +757,9 @@ def run(ctx, task):
     Run maintenance tasks.
     
     Examples:
-        wagehood_cli.py admin maintenance run
-        wagehood_cli.py admin maintenance run --task optimize
-        wagehood_cli.py admin maintenance run --task reindex
+        wagehood admin maintenance run
+        wagehood admin maintenance run --task optimize
+        wagehood admin maintenance run --task reindex
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -786,8 +792,8 @@ def restart(ctx, confirm):
     Restart the system.
     
     Examples:
-        wagehood_cli.py admin restart
-        wagehood_cli.py admin restart --no-confirm
+        wagehood admin restart
+        wagehood admin restart --no-confirm
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -824,8 +830,8 @@ def shutdown(ctx, confirm):
     Shutdown the system.
     
     Examples:
-        wagehood_cli.py admin shutdown
-        wagehood_cli.py admin shutdown --no-confirm
+        wagehood admin shutdown
+        wagehood admin shutdown --no-confirm
     """
     config = ctx.obj['config']
     formatter = ctx.obj['formatter']
@@ -851,3 +857,62 @@ def shutdown(ctx, confirm):
     except Exception as e:
         formatter.print_error(f"Failed to shutdown system: {e}")
         ctx.exit(1)
+
+
+@admin_commands.command()
+@click.option('--log-level', 
+              type=click.Choice(['DEBUG', 'INFO', 'WARNING', 'ERROR'], case_sensitive=False),
+              default='INFO',
+              help='Logging level')
+@click.pass_context
+def run_realtime(ctx, log_level):
+    """
+    Run the real-time data processor directly.
+    
+    This command directly executes the real-time processor script, primarily
+    used by service managers and for testing purposes.
+    
+    Examples:
+        wagehood admin run-realtime
+        wagehood admin run-realtime --log-level DEBUG
+    """
+    import sys
+    import os
+    from pathlib import Path
+    
+    try:
+        # Get the path to run_realtime.py
+        script_path = Path(__file__).parent.parent.parent.parent / "run_realtime.py"
+        
+        if not script_path.exists():
+            click.echo(f"Error: Real-time script not found: {script_path}", err=True)
+            ctx.exit(1)
+        
+        # Set log level environment variable if provided
+        if log_level:
+            os.environ['LOG_LEVEL'] = log_level.upper()
+        
+        # Execute the real-time processor
+        import subprocess
+        cmd = [sys.executable, str(script_path)]
+        
+        # Add log level argument if the script supports it
+        if '--log-level' in sys.argv:
+            cmd.extend(['--log-level', log_level.upper()])
+        
+        # Run the script directly
+        subprocess.run(cmd, check=True)
+        
+    except KeyboardInterrupt:
+        click.echo("\nReal-time processor stopped by user", err=True)
+        ctx.exit(0)
+    except subprocess.CalledProcessError as e:
+        click.echo(f"Real-time processor failed with exit code {e.returncode}", err=True)
+        ctx.exit(e.returncode)
+    except Exception as e:
+        click.echo(f"Error running real-time processor: {e}", err=True)
+        ctx.exit(1)
+
+
+# Export the command group
+admin = admin_commands
