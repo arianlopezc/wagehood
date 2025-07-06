@@ -59,6 +59,8 @@ class MockDataGenerator:
     
     def _random_normal(self, mean: float, std: float, size: int = 1):
         """Generate normal random numbers, with or without numpy."""
+        # Ensure std is always positive
+        std = max(abs(std), 1e-8)
         if HAS_NUMPY:
             return self.rng.normal(mean, std, size)
         else:
