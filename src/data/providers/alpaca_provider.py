@@ -296,7 +296,36 @@ class AlpacaProvider(DataProvider):
             # Convert to OHLCV objects
             ohlcv_data = []
             
-            if symbol in bars:
+            # Handle DataFrame response format
+            if hasattr(bars, 'df') and not bars.df.empty:
+                # Data is in DataFrame format
+                df = bars.df
+                
+                # Filter for the specific symbol if multiple symbols in response
+                if 'symbol' in df.index.names:
+                    symbol_df = df.loc[symbol] if symbol in df.index.get_level_values('symbol') else df
+                else:
+                    symbol_df = df
+                
+                # Convert each row to OHLCV
+                for timestamp, row in symbol_df.iterrows():
+                    # Handle multi-index timestamp
+                    if isinstance(timestamp, tuple):
+                        timestamp = timestamp[-1]  # Get the actual timestamp
+                    
+                    ohlcv = OHLCV(
+                        timestamp=timestamp,
+                        symbol=symbol,
+                        open=float(row['open']),
+                        high=float(row['high']),
+                        low=float(row['low']),
+                        close=float(row['close']),
+                        volume=float(row['volume']) if row['volume'] is not None else 0.0
+                    )
+                    ohlcv_data.append(ohlcv)
+            
+            # Legacy format handling (in case the API returns the old format)
+            elif hasattr(bars, '__getitem__') and symbol in bars:
                 for bar in bars[symbol]:
                     ohlcv_data.append(self._alpaca_bar_to_ohlcv(bar, symbol))
             

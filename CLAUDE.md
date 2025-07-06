@@ -184,6 +184,103 @@ After completing any significant task:
 - Update test scenarios based on discovered edge cases
 - Refine task decomposition strategies based on outcomes
 
+## Documentation Maintenance Protocol
+
+### Documentation Update Requirements
+After ANY code changes, implementation, or feature additions, documentation MUST be updated:
+
+1. **Main README.md Updates:**
+   - Update feature descriptions for any new functionality
+   - Add new CLI commands and examples
+   - Update performance metrics and strategy information
+   - Ensure Quick Start guide reflects current system capabilities
+   - Update architecture diagrams if system components change
+
+2. **CLI Documentation Updates:**
+   - Update CLI_DOCUMENTATION.md for any new commands
+   - Add examples for new command options or flags
+   - Update troubleshooting section for new error scenarios
+   - Ensure all command help text is accurate and comprehensive
+
+3. **Technical Documentation:**
+   - Create API documentation for new classes and methods
+   - Update configuration guides for new parameters
+   - Document performance characteristics of new features
+   - Update deployment instructions if infrastructure changes
+
+4. **Code Documentation:**
+   - Update docstrings for modified functions and classes
+   - Add inline comments for complex logic
+   - Update type hints and parameter descriptions
+   - Ensure strategy explanations match implementation
+
+### Documentation Validation Process
+Before marking any task as complete:
+
+1. **Accuracy Check:**
+   - Verify all examples work as documented
+   - Test all CLI commands and options
+   - Confirm all configuration options are valid
+   - Validate performance claims with actual data
+
+2. **Completeness Check:**
+   - Ensure all new features are documented
+   - Check that examples cover common use cases
+   - Verify troubleshooting covers likely issues
+   - Confirm best practices are up-to-date
+
+3. **Consistency Check:**
+   - Ensure terminology is consistent across all docs
+   - Check that formatting follows project standards
+   - Verify cross-references between documents are accurate
+   - Ensure version numbers and dates are current
+
+### CLI Update Protocol
+After every implementation or change that affects CLI:
+
+1. **Command Updates:**
+   - Update help text for any modified commands
+   - Add new commands to CLI_DOCUMENTATION.md
+   - Update command examples in README.md
+   - Test all documented examples
+
+2. **Error Handling:**
+   - Update error messages to be user-friendly
+   - Add troubleshooting entries for new error scenarios
+   - Ensure error messages guide users to solutions
+   - Document common failure modes and fixes
+
+3. **Performance Documentation:**
+   - Document performance characteristics of new features
+   - Update capacity and scaling guidelines
+   - Add monitoring and optimization recommendations
+   - Include resource usage information
+
+### Documentation File Structure
+Maintain these documentation files:
+
+- **README.md:** Main project documentation with overview, quick start, and examples
+- **CLI_DOCUMENTATION.md:** Comprehensive CLI reference with all commands and examples
+- **CLAUDE.md:** This file - project-specific instructions and standards
+- **CONFIGURATION_GUIDE.md:** Detailed configuration reference (create when needed)
+- **.local/:** Technical design documents and architectural decisions
+
+### Documentation Language Standards
+- **Avoid pretentious or marketing language** that makes unproven claims
+- **Do not use words like**: "professional-grade", "enterprise-level", "industry-leading", "cutting-edge", "world-class", "revolutionary", "state-of-the-art"
+- **Use factual, measured language**: "comprehensive", "multi-strategy", "configurable", "efficient", "functional"
+- **Focus on capabilities, not subjective quality claims**
+- **Be precise about what the system actually does vs. aspirational goals**
+- **Use technical accuracy over promotional language**
+- **State facts, not opinions about quality or superiority**
+
+### Documentation Automation
+- Use consistent formatting and markdown standards
+- Include practical examples for all features
+- Maintain a changelog of major documentation updates
+- Keep troubleshooting sections current with user feedback
+- Ensure all claims can be verified or measured
+
 ## User Review Checkpoints
 Always pause for user review at these points:
 - Before making any commits
@@ -191,3 +288,5 @@ Always pause for user review at these points:
 - Before running any commands that modify project structure
 - When about to make breaking changes
 - Before pushing anything to remote repositories
+- **After any documentation updates** (ensure accuracy and completeness)
+- After implementing new CLI features or API changes

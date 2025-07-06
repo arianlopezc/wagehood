@@ -25,15 +25,128 @@ except ImportError:
 
 from src.storage.cache import cache_manager
 from src.data.providers.mock_provider import MockProvider
-try:
-    from src.data.providers.alpaca_provider import AlpacaProvider
-    ALPACA_PROVIDER_AVAILABLE = True
-except ImportError:
-    ALPACA_PROVIDER_AVAILABLE = False
 from src.core.models import OHLCV
 from src.realtime.config_manager import ConfigManager, AssetConfig
 
+# Check if alpaca-py is available (defer AlpacaProvider import)
+try:
+    import alpaca.data.historical
+    ALPACA_PROVIDER_AVAILABLE = True
+except ImportError:
+    ALPACA_PROVIDER_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+class MinimalAlpacaProvider:
+    """Minimal Alpaca provider implementation for data ingestion."""
+    
+    def __init__(self, config):
+        """Initialize minimal Alpaca provider."""
+        self.name = "Alpaca"
+        self.config = config
+        self._connected = False
+        self.last_error = None
+        
+        # Initialize clients
+        self.stock_client = None
+        
+    async def connect(self):
+        """Connect to Alpaca."""
+        try:
+            from alpaca.data.historical import StockHistoricalDataClient
+            
+            self.stock_client = StockHistoricalDataClient(
+                api_key=self.config['api_key'],
+                secret_key=self.config['secret_key']
+            )
+            
+            # Test connection
+            await self._test_connection()
+            self._connected = True
+            return True
+            
+        except Exception as e:
+            self.last_error = str(e)
+            return False
+    
+    async def disconnect(self):
+        """Disconnect from Alpaca."""
+        self._connected = False
+    
+    async def _test_connection(self):
+        """Test connection with a simple request."""
+        try:
+            from alpaca.data.requests import StockBarsRequest
+            from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame
+            from datetime import datetime, timedelta
+            
+            # Test with a simple stock request
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=2)
+            
+            request = StockBarsRequest(
+                symbol_or_symbols=["AAPL"],
+                timeframe=AlpacaTimeFrame.Day,
+                start=start_date,
+                end=end_date
+            )
+            bars = self.stock_client.get_stock_bars(request)
+            return True
+            
+        except Exception as e:
+            raise Exception(f"Connection test failed: {str(e)}")
+    
+    def get_latest_data(self, symbol):
+        """Get latest data for symbol."""
+        try:
+            from alpaca.data.requests import StockBarsRequest
+            from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame
+            from datetime import datetime, timedelta
+            
+            if not self._connected:
+                return None
+            
+            # Get recent data
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=7)
+            
+            request = StockBarsRequest(
+                symbol_or_symbols=[symbol],
+                timeframe=AlpacaTimeFrame.Day,
+                start=start_date,
+                end=end_date
+            )
+            
+            bars = self.stock_client.get_stock_bars(request)
+            
+            # Convert to OHLCV format
+            if hasattr(bars, 'df') and not bars.df.empty:
+                df = bars.df
+                
+                # Get the latest row
+                latest_row = df.iloc[-1]
+                latest_timestamp = df.index[-1]
+                
+                # Handle multi-index timestamp
+                if isinstance(latest_timestamp, tuple):
+                    latest_timestamp = latest_timestamp[-1]
+                
+                ohlcv = OHLCV(
+                    timestamp=latest_timestamp,
+                    open=float(latest_row['open']),
+                    high=float(latest_row['high']),
+                    low=float(latest_row['low']),
+                    close=float(latest_row['close']),
+                    volume=float(latest_row['volume']) if latest_row['volume'] is not None else 0.0
+                )
+                return ohlcv
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting latest data for {symbol}: {e}")
+            return None
 
 
 @dataclass
@@ -158,6 +271,22 @@ class MarketDataIngestionService:
             "mock": MockProvider()
         }
         
+        # Initialize Alpaca provider if available
+        if ALPACA_PROVIDER_AVAILABLE:
+            try:
+                # Create Alpaca provider using a direct method to avoid import issues
+                alpaca_provider = self._create_alpaca_provider()
+                if alpaca_provider:
+                    self._providers["alpaca"] = alpaca_provider
+                    logger.info("Alpaca provider initialized successfully")
+                else:
+                    logger.warning("Alpaca credentials not found, provider not initialized")
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize Alpaca provider: {e}")
+        else:
+            logger.warning("Alpaca provider not available")
+        
         # Performance tracking
         self._stats = {
             "events_published": 0,
@@ -169,6 +298,35 @@ class MarketDataIngestionService:
         
         self._initialize_redis()
         self._initialize_streams()
+    
+    def _create_alpaca_provider(self):
+        """Create Alpaca provider to avoid import issues."""
+        try:
+            import os
+            
+            # Get configuration
+            api_key = os.getenv('ALPACA_API_KEY')
+            secret_key = os.getenv('ALPACA_SECRET_KEY')
+            
+            if not api_key or not secret_key:
+                return None
+            
+            config = {
+                'api_key': api_key,
+                'secret_key': secret_key,
+                'paper': os.getenv('ALPACA_PAPER_TRADING', 'true').lower() == 'true',
+                'feed': os.getenv('ALPACA_DATA_FEED', 'iex'),
+                'max_retries': int(os.getenv('ALPACA_MAX_RETRIES', '3')),
+                'retry_delay': float(os.getenv('ALPACA_RETRY_DELAY', '1.0'))
+            }
+            
+            # Create a minimal Alpaca provider directly here
+            provider = MinimalAlpacaProvider(config)
+            return provider
+            
+        except Exception as e:
+            logger.error(f"Error creating Alpaca provider: {e}")
+            return None
     
     def _initialize_redis(self):
         """Initialize Redis connection for streams."""
@@ -241,6 +399,18 @@ class MarketDataIngestionService:
         logger.info("Starting market data ingestion service")
         
         try:
+            # Connect all providers
+            for provider_name, provider in self._providers.items():
+                try:
+                    if hasattr(provider, 'connect'):
+                        connected = await provider.connect()
+                        if connected:
+                            logger.info(f"Connected to {provider_name} provider")
+                        else:
+                            logger.warning(f"Failed to connect to {provider_name} provider")
+                except Exception as e:
+                    logger.error(f"Error connecting to {provider_name} provider: {e}")
+            
             # Get system configuration
             system_config = self.config_manager.get_system_config()
             if not system_config:

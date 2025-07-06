@@ -353,6 +353,38 @@ class MockProvider(DataProvider):
         """Clear the data cache."""
         self._data_cache.clear()
     
+    def get_latest_data(self, symbol: str, timeframe: TimeFrame = TimeFrame.MINUTE_1) -> Optional[OHLCV]:
+        """
+        Synchronous method to get the latest data point for a symbol.
+        This is used by the real-time data ingestion service.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Data timeframe (defaults to 1 minute)
+            
+        Returns:
+            Latest OHLCV data point or None if not available
+        """
+        try:
+            # Generate a single data point for current time
+            current_time = datetime.now()
+            
+            # Use the generator to create realistic data
+            data = self.generator.generate_realistic_data(
+                symbol=symbol,
+                periods=1,
+                start_date=current_time,
+                timeframe=timeframe
+            )
+            
+            if data:
+                return data[0]
+            return None
+            
+        except Exception as e:
+            self._set_error(f"Failed to generate latest data for {symbol}: {e}")
+            return None
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.

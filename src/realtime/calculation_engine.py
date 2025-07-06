@@ -23,25 +23,34 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from src.storage.cache import cache_manager
-from src.realtime.config_manager import ConfigManager, IndicatorConfig, StrategyConfig
+from src.realtime.config_manager import ConfigManager, IndicatorConfig, StrategyConfig, TradingProfile
 from src.realtime.incremental_indicators import IncrementalIndicatorCalculator
 from src.realtime.data_ingestion import MarketDataIngestionService
+from src.realtime.timeframe_manager import TimeframeManager
+from src.realtime.signal_engine import SignalEngine
 
 logger = logging.getLogger(__name__)
 
 
 class CalculationEngine:
     """
-    Real-time calculation engine for technical indicators and trading strategies.
+    Advanced real-time calculation engine for multi-strategy multi-timeframe analysis.
     
     This engine processes market data events from Redis Streams and performs
-    incremental calculations to maintain up-to-date indicator values and
-    trading signals.
+    sophisticated analysis across multiple timeframes simultaneously, generating
+    composite signals from multiple strategies with correlation analysis.
+    
+    Features:
+    - Multi-timeframe data aggregation
+    - Simultaneous processing of 5 strategies across 3+ timeframes
+    - Efficient caching and memory management
+    - Signal correlation and composite scoring
+    - High-frequency updates with performance optimization
     """
     
     def __init__(self, config_manager: ConfigManager, ingestion_service: MarketDataIngestionService):
         """
-        Initialize the calculation engine.
+        Initialize the advanced calculation engine.
         
         Args:
             config_manager: Configuration manager instance
@@ -52,6 +61,12 @@ class CalculationEngine:
         
         self.config_manager = config_manager
         self.ingestion_service = ingestion_service
+        
+        # Core components for multi-timeframe processing
+        self.timeframe_manager = TimeframeManager(config_manager)
+        self.signal_engine = SignalEngine(config_manager, self.timeframe_manager)
+        
+        # Legacy single-timeframe calculator for backward compatibility
         self.indicator_calculator = IncrementalIndicatorCalculator()
         
         self._redis_client = None
@@ -59,17 +74,23 @@ class CalculationEngine:
         self._tasks = []
         self._executor = ThreadPoolExecutor(max_workers=4)
         
-        # Performance tracking with thread-safe counters
+        # Enhanced performance tracking for multi-timeframe processing
         self._stats_lock = threading.Lock()
         self._stats = {
             "calculations_performed": 0,
             "signals_generated": 0,
+            "composite_signals_generated": 0,
+            "timeframe_updates": {},
+            "strategy_timeframe_combinations": 0,
             "errors": 0,
             "last_calculation_time": None,
             "average_calculation_time_ms": 0.0,
             "symbols_processed": set(),
             "indicators_calculated": {},
-            "strategies_processed": {}
+            "strategies_processed": {},
+            "timeframes_processed": set(),
+            "memory_usage_mb": 0.0,
+            "cache_hit_rate": 0.0
         }
         
         # Batch processing buffer
@@ -85,7 +106,7 @@ class CalculationEngine:
     def _initialize_redis(self):
         """Initialize Redis connection for stream consumption."""
         try:
-            from ..core.constants import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
+            from src.core.constants import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD
             
             self._redis_client = redis.Redis(
                 host=REDIS_HOST,
@@ -133,6 +154,10 @@ class CalculationEngine:
             # Start cache maintenance task
             cache_task = asyncio.create_task(self._maintain_cache())
             self._tasks.append(cache_task)
+            
+            # Start cleanup task for timeframe manager and signal engine
+            cleanup_task = asyncio.create_task(self._cleanup_old_data())
+            self._tasks.append(cleanup_task)
             
             # Wait for all tasks
             await asyncio.gather(*self._tasks)
@@ -297,7 +322,10 @@ class CalculationEngine:
     
     def _calculate_indicators_for_symbol(self, symbol: str, price: float, message_data: Dict):
         """
-        Calculate all enabled indicators for a symbol.
+        Calculate indicators and signals across all timeframes for a symbol.
+        
+        This method now processes multiple timeframes simultaneously and generates
+        composite signals using the advanced signal engine.
         
         Args:
             symbol: Trading symbol
@@ -305,46 +333,80 @@ class CalculationEngine:
             message_data: Additional market data
         """
         try:
-            # Get enabled indicators (cached)
-            enabled_indicators = self._get_enabled_indicators_cached()
+            # Get symbol configuration
+            watchlist = self.config_manager.get_watchlist()
+            symbol_config = next((asset for asset in watchlist if asset.symbol == symbol), None)
             
-            calculation_results = {}
+            if not symbol_config or not symbol_config.enabled:
+                logger.warning(f"Symbol {symbol} not found or disabled in watchlist")
+                return
             
-            # Batch calculate indicators for better performance
-            indicator_batches = self._group_indicators_by_type(enabled_indicators)
+            # Extract timestamp and volume from message data
+            timestamp_str = message_data.get('timestamp')
+            timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.now()
+            volume = float(message_data.get('volume', 0))
             
-            for indicator_type, configs in indicator_batches.items():
-                try:
-                    # Calculate all indicators of the same type together
-                    batch_results = self._calculate_indicator_batch(
-                        indicator_type, configs, symbol, price, message_data
-                    )
-                    calculation_results.update(batch_results)
-                    
-                    # Update stats in batch
-                    self._update_indicator_stats(batch_results.keys())
-                
-                except Exception as e:
-                    logger.error(f"Error calculating {indicator_type} indicators for {symbol}: {e}")
-                    self._increment_error_count()
-            
-            # Generate trading signals
-            signals = self._generate_trading_signals(symbol, calculation_results)
-            if signals:
-                calculation_results["signals"] = signals
-            
-            # Store results in cache
-            self._store_calculation_results(symbol, calculation_results)
-            
-            # Publish calculation event asynchronously
-            asyncio.create_task(
-                self.ingestion_service.publish_calculation_event(symbol, calculation_results)
+            # Process multi-timeframe analysis
+            timeframe_results = self.timeframe_manager.process_tick(
+                symbol=symbol,
+                price=price,
+                volume=volume,
+                timestamp=timestamp,
+                timeframes=symbol_config.timeframes,
+                trading_profile=symbol_config.trading_profile
             )
+            
+            # Generate composite signals if we have timeframe results
+            composite_signal = None
+            if timeframe_results:
+                composite_signal = self.signal_engine.generate_signals(
+                    symbol=symbol,
+                    price=price,
+                    timeframe_results=timeframe_results,
+                    trading_profile=symbol_config.trading_profile
+                )
+            
+            # Prepare comprehensive calculation results
+            calculation_results = {
+                "timeframe_results": timeframe_results,
+                "composite_signal": composite_signal.get_signal_summary() if composite_signal else None,
+                "timestamp": timestamp.isoformat(),
+                "symbol_config": {
+                    "timeframes": symbol_config.timeframes,
+                    "trading_profile": symbol_config.trading_profile.value,
+                    "enabled_strategies": symbol_config.enabled_strategies
+                }
+            }
+            
+            # Also run legacy single-timeframe calculation for backward compatibility
+            legacy_results = self._calculate_legacy_indicators(symbol, price, message_data)
+            if legacy_results:
+                calculation_results["legacy_indicators"] = legacy_results
+                
+                # Generate legacy signals
+                legacy_signals = self._generate_trading_signals(symbol, legacy_results)
+                if legacy_signals:
+                    calculation_results["legacy_signals"] = legacy_signals
+            
+            # Store results in cache with timeframe-specific keys
+            self._store_multi_timeframe_results(symbol, calculation_results)
+            
+            # Update performance statistics
+            self._update_multi_timeframe_stats(symbol, timeframe_results, composite_signal)
+            
+            # Publish calculation event (skip in non-async context)
+            try:
+                asyncio.create_task(
+                    self.ingestion_service.publish_calculation_event(symbol, calculation_results)
+                )
+            except RuntimeError:
+                # No event loop running - skip async publishing in test context
+                logger.debug(f"Skipping async event publishing for {symbol} (no event loop)")
             
             self._increment_calculation_count()
             
         except Exception as e:
-            logger.error(f"Error calculating indicators for {symbol}: {e}")
+            logger.error(f"Error in multi-timeframe calculation for {symbol}: {e}")
             self._increment_error_count()
     
     def _calculate_single_indicator(self, indicator_config: IndicatorConfig, 
@@ -736,8 +798,8 @@ class CalculationEngine:
             try:
                 await asyncio.sleep(300)  # Every 5 minutes
                 
-                # This could be expanded to clean up old cache entries
-                # For now, rely on TTL
+                # Clean up old cache entries
+                # For now, rely on TTL but could be expanded
                 logger.debug("Cache maintenance cycle completed")
                 
             except asyncio.CancelledError:
@@ -745,9 +807,38 @@ class CalculationEngine:
             except Exception as e:
                 logger.error(f"Error in cache maintenance: {e}")
     
+    async def _cleanup_old_data(self):
+        """Clean up old data from timeframe manager and signal engine."""
+        while self._running:
+            try:
+                await asyncio.sleep(3600)  # Every hour
+                
+                # Clean up old timeframe data (keep last 24 hours)
+                self.timeframe_manager.cleanup_old_data(max_age_hours=24)
+                
+                # Clean up old signals (keep last 24 hours)
+                self.signal_engine.cleanup_old_signals(max_age_hours=24)
+                
+                # Update memory usage stats
+                memory_stats = self.timeframe_manager.get_memory_usage()
+                total_memory_mb = sum(
+                    data.get('memory_estimate_mb', 0) 
+                    for data in memory_stats.get('symbol_breakdown', {}).values()
+                )
+                
+                with self._stats_lock:
+                    self._stats['memory_usage_mb'] = total_memory_mb
+                
+                logger.debug(f"Data cleanup completed. Memory usage: {total_memory_mb:.2f}MB")
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in data cleanup: {e}")
+    
     def get_stats(self) -> Dict[str, Any]:
         """
-        Get calculation engine statistics.
+        Get comprehensive calculation engine statistics.
         
         Returns:
             Dictionary with performance statistics
@@ -756,12 +847,20 @@ class CalculationEngine:
             # Create a copy to avoid modification during read
             stats_copy = self._stats.copy()
             stats_copy["symbols_processed"] = list(self._stats["symbols_processed"])
+            stats_copy["timeframes_processed"] = list(self._stats["timeframes_processed"])
             
+        # Get additional stats from components
+        timeframe_stats = self.timeframe_manager.get_stats()
+        signal_stats = self.signal_engine.get_stats()
+        
         return {
             **stats_copy,
             "running": self._running,
             "active_tasks": len(self._tasks),
-            "indicator_calculator_state": self.indicator_calculator.get_state_summary()
+            "legacy_indicator_calculator_state": self.indicator_calculator.get_state_summary(),
+            "timeframe_manager_stats": timeframe_stats,
+            "signal_engine_stats": signal_stats,
+            "multi_timeframe_enabled": True
         }
     
     def get_latest_results(self, symbol: str) -> Optional[Dict[str, Any]]:
@@ -872,6 +971,312 @@ class CalculationEngine:
         """Thread-safe calculation count increment."""
         with self._stats_lock:
             self._stats["calculations_performed"] += 1
+    
+    def _calculate_legacy_indicators(self, symbol: str, price: float, message_data: Dict) -> Dict[str, Any]:
+        """
+        Calculate indicators using the legacy single-timeframe approach.
+        
+        This method provides backward compatibility while the new multi-timeframe
+        system is being adopted.
+        
+        Args:
+            symbol: Trading symbol
+            price: Current price
+            message_data: Additional market data
+            
+        Returns:
+            Dictionary with legacy indicator results
+        """
+        try:
+            # Get enabled indicators (cached)
+            enabled_indicators = self._get_enabled_indicators_cached()
+            
+            calculation_results = {}
+            
+            # Batch calculate indicators for better performance
+            indicator_batches = self._group_indicators_by_type(enabled_indicators)
+            
+            for indicator_type, configs in indicator_batches.items():
+                try:
+                    # Calculate all indicators of the same type together
+                    batch_results = self._calculate_indicator_batch(
+                        indicator_type, configs, symbol, price, message_data
+                    )
+                    calculation_results.update(batch_results)
+                    
+                    # Update stats in batch
+                    self._update_indicator_stats(batch_results.keys())
+                
+                except Exception as e:
+                    logger.error(f"Error calculating {indicator_type} indicators for {symbol}: {e}")
+                    self._increment_error_count()
+            
+            return calculation_results
+            
+        except Exception as e:
+            logger.error(f"Error in legacy indicator calculation for {symbol}: {e}")
+            return {}
+    
+    def _store_multi_timeframe_results(self, symbol: str, results: Dict[str, Any]):
+        """
+        Store multi-timeframe calculation results in cache.
+        
+        Args:
+            symbol: Trading symbol
+            results: Comprehensive calculation results
+        """
+        try:
+            # Store complete multi-timeframe results
+            cache_key = f"{symbol}_multi_timeframe"
+            cache_manager.set("multi_timeframe_calculations", cache_key, results, ttl=300)
+            
+            # Store timeframe-specific results
+            timeframe_results = results.get("timeframe_results", {})
+            for timeframe, tf_data in timeframe_results.items():
+                tf_cache_key = f"{symbol}_{timeframe}"
+                cache_manager.set("timeframe_indicators", tf_cache_key, tf_data, ttl=300)
+            
+            # Store composite signal separately for quick access
+            composite_signal = results.get("composite_signal")
+            if composite_signal:
+                signal_cache_key = f"{symbol}_composite_signal"
+                cache_manager.set("composite_signals", signal_cache_key, composite_signal, ttl=600)
+            
+            # Maintain backward compatibility - store legacy results
+            legacy_indicators = results.get("legacy_indicators", {})
+            if legacy_indicators:
+                for indicator_name, value in legacy_indicators.items():
+                    if indicator_name != "signals":
+                        cache_key = f"{symbol}_{indicator_name}"
+                        cache_manager.set("indicators", cache_key, value, ttl=300)
+                
+                # Store legacy signals
+                legacy_signals = results.get("legacy_signals")
+                if legacy_signals:
+                    cache_key = f"{symbol}_signals"
+                    cache_manager.set("strategies", cache_key, legacy_signals, ttl=600)
+            
+        except Exception as e:
+            logger.error(f"Error storing multi-timeframe results for {symbol}: {e}")
+    
+    def _update_multi_timeframe_stats(self, symbol: str, timeframe_results: Dict[str, Any], 
+                                    composite_signal: Any):
+        """
+        Update performance statistics for multi-timeframe processing.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe_results: Results from timeframe processing
+            composite_signal: Generated composite signal
+        """
+        try:
+            with self._stats_lock:
+                # Update timeframe processing stats
+                for timeframe in timeframe_results.keys():
+                    self._stats["timeframes_processed"].add(timeframe)
+                    if timeframe not in self._stats["timeframe_updates"]:
+                        self._stats["timeframe_updates"][timeframe] = 0
+                    self._stats["timeframe_updates"][timeframe] += 1
+                
+                # Update signal generation stats
+                if composite_signal:
+                    self._stats["composite_signals_generated"] += 1
+                    
+                    # Count strategy-timeframe combinations
+                    contributing_signals = getattr(composite_signal, 'contributing_signals', [])
+                    self._stats["strategy_timeframe_combinations"] += len(contributing_signals)
+                    
+                    # Update strategy stats
+                    for signal in contributing_signals:
+                        strategy_name = getattr(signal, 'strategy', 'unknown')
+                        if strategy_name not in self._stats["strategies_processed"]:
+                            self._stats["strategies_processed"][strategy_name] = 0
+                        self._stats["strategies_processed"][strategy_name] += 1
+                
+        except Exception as e:
+            logger.error(f"Error updating multi-timeframe stats: {e}")
+    
+    def get_latest_multi_timeframe_results(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get latest multi-timeframe calculation results for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Latest multi-timeframe results or None
+        """
+        try:
+            cache_key = f"{symbol}_multi_timeframe"
+            return cache_manager.get("multi_timeframe_calculations", cache_key)
+        except Exception as e:
+            logger.error(f"Error getting multi-timeframe results for {symbol}: {e}")
+            return None
+    
+    def get_timeframe_indicators(self, symbol: str, timeframe: str) -> Optional[Dict[str, Any]]:
+        """
+        Get indicator values for a specific symbol and timeframe.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe string (e.g., '1m', '5m', '1h')
+            
+        Returns:
+            Indicator values for the timeframe or None
+        """
+        try:
+            tf_cache_key = f"{symbol}_{timeframe}"
+            return cache_manager.get("timeframe_indicators", tf_cache_key)
+        except Exception as e:
+            logger.error(f"Error getting timeframe indicators for {symbol}@{timeframe}: {e}")
+            return None
+    
+    def get_composite_signal(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get latest composite signal for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Latest composite signal or None
+        """
+        try:
+            signal_cache_key = f"{symbol}_composite_signal"
+            return cache_manager.get("composite_signals", signal_cache_key)
+        except Exception as e:
+            logger.error(f"Error getting composite signal for {symbol}: {e}")
+            return None
+    
+    def get_cross_timeframe_analysis(self, symbol: str) -> Dict[str, Any]:
+        """
+        Get cross-timeframe correlation analysis for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Cross-timeframe analysis results
+        """
+        try:
+            # Get symbol configuration
+            watchlist = self.config_manager.get_watchlist()
+            symbol_config = next((asset for asset in watchlist if asset.symbol == symbol), None)
+            
+            if not symbol_config:
+                return {"error": f"Symbol {symbol} not found in watchlist"}
+            
+            # Get correlation analysis from timeframe manager
+            correlation_data = self.timeframe_manager.get_cross_timeframe_correlation(
+                symbol, symbol_config.timeframes
+            )
+            
+            # Get latest composite signal for additional context
+            composite_signal = self.get_composite_signal(symbol)
+            
+            analysis = {
+                "symbol": symbol,
+                "timeframes_analyzed": symbol_config.timeframes,
+                "correlation_data": correlation_data,
+                "latest_composite_signal": composite_signal,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Error getting cross-timeframe analysis for {symbol}: {e}")
+            return {"error": str(e)}
+    
+    def reset_symbol_multi_timeframe(self, symbol: str):
+        """
+        Reset all multi-timeframe data for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+        """
+        try:
+            # Reset timeframe manager data
+            self.timeframe_manager.reset_symbol(symbol)
+            
+            # Reset signal engine data
+            self.signal_engine.reset_symbol(symbol)
+            
+            # Reset legacy indicator calculator
+            self.indicator_calculator.reset_symbol(symbol)
+            
+            logger.info(f"Reset all multi-timeframe data for {symbol}")
+            
+        except Exception as e:
+            logger.error(f"Error resetting multi-timeframe data for {symbol}: {e}")
+    
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """
+        Get a comprehensive performance summary of the calculation engine.
+        
+        Returns:
+            Dictionary with performance metrics and recommendations
+        """
+        try:
+            stats = self.get_stats()
+            timeframe_stats = stats.get("timeframe_manager_stats", {})
+            signal_stats = stats.get("signal_engine_stats", {})
+            
+            # Calculate performance metrics
+            total_calculations = stats.get("calculations_performed", 0)
+            total_composite_signals = stats.get("composite_signals_generated", 0)
+            avg_processing_time = stats.get("average_calculation_time_ms", 0.0)
+            memory_usage = stats.get("memory_usage_mb", 0.0)
+            
+            # Calculate efficiency metrics
+            calculations_per_signal = (
+                total_calculations / total_composite_signals 
+                if total_composite_signals > 0 else 0
+            )
+            
+            symbols_count = len(stats.get("symbols_processed", []))
+            timeframes_count = len(stats.get("timeframes_processed", []))
+            
+            # Generate performance assessment
+            performance_level = "Good"
+            recommendations = []
+            
+            if avg_processing_time > 100:  # > 100ms
+                performance_level = "Needs Optimization"
+                recommendations.append("Consider increasing batch sizes or reducing update frequency")
+            elif avg_processing_time > 50:  # > 50ms
+                performance_level = "Fair"
+                recommendations.append("Monitor processing times during peak load")
+            
+            if memory_usage > 500:  # > 500MB
+                performance_level = "High Memory Usage"
+                recommendations.append("Consider reducing lookback periods or cleaning old data more frequently")
+            
+            summary = {
+                "performance_level": performance_level,
+                "recommendations": recommendations,
+                "key_metrics": {
+                    "total_calculations": total_calculations,
+                    "total_composite_signals": total_composite_signals,
+                    "calculations_per_signal": calculations_per_signal,
+                    "average_processing_time_ms": avg_processing_time,
+                    "memory_usage_mb": memory_usage,
+                    "symbols_processed": symbols_count,
+                    "timeframes_processed": timeframes_count,
+                    "strategy_timeframe_combinations": stats.get("strategy_timeframe_combinations", 0)
+                },
+                "component_stats": {
+                    "timeframe_manager": timeframe_stats,
+                    "signal_engine": signal_stats
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error generating performance summary: {e}")
+            return {"error": str(e)}
 
 
 # Factory function for easy instantiation

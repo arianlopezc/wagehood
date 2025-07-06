@@ -11,12 +11,71 @@ import json
 import logging
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
+from enum import Enum
 
 from src.storage.cache import cache_manager
 from src.core.constants import SUPPORTED_SYMBOLS
 
 logger = logging.getLogger(__name__)
+
+
+class TradingProfile(Enum):
+    """Trading profile that determines timeframe and update frequency settings."""
+    DAY_TRADING = "day_trading"
+    SWING_TRADING = "swing_trading"
+    POSITION_TRADING = "position_trading"
+
+
+@dataclass
+class TimeframeConfig:
+    """Configuration for a specific timeframe."""
+    timeframe: str
+    update_interval_seconds: int
+    lookback_periods: int
+    min_data_points: int = 200
+    priority: int = 1  # Higher priority = more frequent updates
+    
+    def validate(self) -> bool:
+        """Validate timeframe configuration."""
+        valid_timeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
+        return (
+            self.timeframe in valid_timeframes and
+            self.update_interval_seconds > 0 and
+            self.lookback_periods > 0 and
+            self.min_data_points > 0
+        )
+
+
+@dataclass
+class StrategyTimeframeMatrix:
+    """Maps strategies to their appropriate timeframes and trading profiles."""
+    strategy_name: str
+    supported_timeframes: List[str]
+    optimal_timeframe: str
+    trading_profile: TradingProfile
+    min_bars_required: int = 200
+    
+    def is_timeframe_supported(self, timeframe: str) -> bool:
+        """Check if a timeframe is supported for this strategy."""
+        return timeframe in self.supported_timeframes
+
+
+@dataclass
+class SymbolStrategyConfig:
+    """Per-symbol strategy enablement and configuration."""
+    symbol: str
+    enabled_strategies: List[str]
+    strategy_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    trading_profile: TradingProfile = TradingProfile.SWING_TRADING
+    
+    def is_strategy_enabled(self, strategy_name: str) -> bool:
+        """Check if a strategy is enabled for this symbol."""
+        return strategy_name in self.enabled_strategies
+    
+    def get_strategy_params(self, strategy_name: str) -> Dict[str, Any]:
+        """Get strategy parameters with overrides applied."""
+        return self.strategy_overrides.get(strategy_name, {})
 
 
 @dataclass
@@ -38,6 +97,11 @@ class StrategyConfig:
     required_indicators: List[str]
     update_frequency_seconds: int = 1
     ttl_seconds: int = 600
+    # Multi-timeframe support
+    supported_timeframes: List[str] = field(default_factory=lambda: ['1m', '5m', '1h', '1d'])
+    optimal_timeframe: str = '5m'
+    trading_profile: TradingProfile = TradingProfile.SWING_TRADING
+    timeframe_parameters: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -50,6 +114,10 @@ class AssetConfig:
     priority: int = 1  # Higher priority = more frequent updates
     asset_type: str = "stock"  # stock, crypto, forex
     last_updated: Optional[datetime] = None
+    # Multi-strategy support
+    enabled_strategies: List[str] = field(default_factory=list)
+    trading_profile: TradingProfile = TradingProfile.SWING_TRADING
+    strategy_overrides: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -85,9 +153,139 @@ class ConfigManager:
         self._default_indicators = self._get_default_indicators()
         self._default_strategies = self._get_default_strategies()
         self._default_system_config = self._get_default_system_config()
+        self._default_timeframe_configs = self.get_default_timeframe_configs()
+        self._default_strategy_matrix = self.get_default_strategy_matrix()
         
         # Initialize configuration if not exists
         self._initialize_config()
+    
+    def get_default_timeframe_configs(self) -> Dict[TradingProfile, List[TimeframeConfig]]:
+        """Get default timeframe configurations for each trading profile."""
+        return {
+            TradingProfile.DAY_TRADING: [
+                TimeframeConfig(
+                    timeframe='1m',
+                    update_interval_seconds=1,
+                    lookback_periods=500,
+                    min_data_points=200,
+                    priority=3
+                ),
+                TimeframeConfig(
+                    timeframe='5m',
+                    update_interval_seconds=5,
+                    lookback_periods=300,
+                    min_data_points=100,
+                    priority=2
+                ),
+                TimeframeConfig(
+                    timeframe='15m',
+                    update_interval_seconds=15,
+                    lookback_periods=200,
+                    min_data_points=100,
+                    priority=1
+                )
+            ],
+            TradingProfile.SWING_TRADING: [
+                TimeframeConfig(
+                    timeframe='5m',
+                    update_interval_seconds=5,
+                    lookback_periods=300,
+                    min_data_points=200,
+                    priority=2
+                ),
+                TimeframeConfig(
+                    timeframe='1h',
+                    update_interval_seconds=60,
+                    lookback_periods=200,
+                    min_data_points=100,
+                    priority=3
+                ),
+                TimeframeConfig(
+                    timeframe='4h',
+                    update_interval_seconds=300,
+                    lookback_periods=150,
+                    min_data_points=50,
+                    priority=2
+                ),
+                TimeframeConfig(
+                    timeframe='1d',
+                    update_interval_seconds=3600,
+                    lookback_periods=100,
+                    min_data_points=50,
+                    priority=1
+                )
+            ],
+            TradingProfile.POSITION_TRADING: [
+                TimeframeConfig(
+                    timeframe='1h',
+                    update_interval_seconds=300,
+                    lookback_periods=500,
+                    min_data_points=200,
+                    priority=1
+                ),
+                TimeframeConfig(
+                    timeframe='4h',
+                    update_interval_seconds=900,
+                    lookback_periods=300,
+                    min_data_points=100,
+                    priority=2
+                ),
+                TimeframeConfig(
+                    timeframe='1d',
+                    update_interval_seconds=3600,
+                    lookback_periods=200,
+                    min_data_points=100,
+                    priority=3
+                ),
+                TimeframeConfig(
+                    timeframe='1w',
+                    update_interval_seconds=86400,
+                    lookback_periods=52,
+                    min_data_points=52,
+                    priority=1
+                )
+            ]
+        }
+    
+    def get_default_strategy_matrix(self) -> List[StrategyTimeframeMatrix]:
+        """Get default strategy-timeframe matrix configurations."""
+        return [
+            StrategyTimeframeMatrix(
+                strategy_name="macd_rsi_strategy",
+                supported_timeframes=['5m', '15m', '1h', '4h', '1d'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                min_bars_required=200
+            ),
+            StrategyTimeframeMatrix(
+                strategy_name="ma_crossover_strategy",
+                supported_timeframes=['15m', '1h', '4h', '1d', '1w'],
+                optimal_timeframe='1d',
+                trading_profile=TradingProfile.POSITION_TRADING,
+                min_bars_required=250
+            ),
+            StrategyTimeframeMatrix(
+                strategy_name="rsi_trend_strategy",
+                supported_timeframes=['5m', '15m', '1h', '4h'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                min_bars_required=150
+            ),
+            StrategyTimeframeMatrix(
+                strategy_name="bollinger_breakout_strategy",
+                supported_timeframes=['1m', '5m', '15m', '1h'],
+                optimal_timeframe='15m',
+                trading_profile=TradingProfile.DAY_TRADING,
+                min_bars_required=100
+            ),
+            StrategyTimeframeMatrix(
+                strategy_name="sr_breakout_strategy",
+                supported_timeframes=['5m', '15m', '1h', '4h'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                min_bars_required=200
+            )
+        ]
     
     def _get_default_indicators(self) -> List[IndicatorConfig]:
         """Get default indicator configurations."""
@@ -159,7 +357,15 @@ class ConfigManager:
                 },
                 required_indicators=["rsi_14", "macd"],
                 update_frequency_seconds=1,
-                ttl_seconds=600
+                ttl_seconds=600,
+                supported_timeframes=['5m', '15m', '1h', '4h', '1d'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                timeframe_parameters={
+                    '5m': {'rsi_overbought': 75, 'rsi_oversold': 25},
+                    '1h': {'rsi_overbought': 70, 'rsi_oversold': 30},
+                    '1d': {'rsi_overbought': 65, 'rsi_oversold': 35}
+                }
             ),
             StrategyConfig(
                 name="ma_crossover_strategy",
@@ -170,7 +376,15 @@ class ConfigManager:
                 },
                 required_indicators=["sma_50", "sma_200"],
                 update_frequency_seconds=1,
-                ttl_seconds=600
+                ttl_seconds=600,
+                supported_timeframes=['15m', '1h', '4h', '1d', '1w'],
+                optimal_timeframe='1d',
+                trading_profile=TradingProfile.POSITION_TRADING,
+                timeframe_parameters={
+                    '15m': {'fast_period': 20, 'slow_period': 50},
+                    '1h': {'fast_period': 50, 'slow_period': 200},
+                    '1d': {'fast_period': 50, 'slow_period': 200}
+                }
             ),
             StrategyConfig(
                 name="rsi_trend_strategy",
@@ -183,7 +397,14 @@ class ConfigManager:
                 },
                 required_indicators=["rsi_14", "sma_50"],
                 update_frequency_seconds=1,
-                ttl_seconds=600
+                ttl_seconds=600,
+                supported_timeframes=['5m', '15m', '1h', '4h'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                timeframe_parameters={
+                    '5m': {'rsi_overbought': 75, 'rsi_oversold': 25},
+                    '1h': {'rsi_overbought': 70, 'rsi_oversold': 30}
+                }
             ),
             StrategyConfig(
                 name="bollinger_breakout_strategy",
@@ -195,7 +416,15 @@ class ConfigManager:
                 },
                 required_indicators=["bollinger_bands"],
                 update_frequency_seconds=1,
-                ttl_seconds=600
+                ttl_seconds=600,
+                supported_timeframes=['1m', '5m', '15m', '1h'],
+                optimal_timeframe='15m',
+                trading_profile=TradingProfile.DAY_TRADING,
+                timeframe_parameters={
+                    '1m': {'bb_std_dev': 2.5, 'volume_threshold': 2.0},
+                    '5m': {'bb_std_dev': 2.0, 'volume_threshold': 1.5},
+                    '15m': {'bb_std_dev': 1.8, 'volume_threshold': 1.2}
+                }
             ),
             StrategyConfig(
                 name="sr_breakout_strategy",
@@ -207,7 +436,15 @@ class ConfigManager:
                 },
                 required_indicators=["sma_50"],
                 update_frequency_seconds=1,
-                ttl_seconds=600
+                ttl_seconds=600,
+                supported_timeframes=['5m', '15m', '1h', '4h'],
+                optimal_timeframe='1h',
+                trading_profile=TradingProfile.SWING_TRADING,
+                timeframe_parameters={
+                    '5m': {'lookback_period': 10, 'breakout_threshold': 0.005},
+                    '1h': {'lookback_period': 20, 'breakout_threshold': 0.01},
+                    '4h': {'lookback_period': 30, 'breakout_threshold': 0.015}
+                }
             )
         ]
     
@@ -235,7 +472,9 @@ class ConfigManager:
                         enabled=True,
                         data_provider=os.environ.get('DATA_PROVIDER', 'mock'),
                         timeframes=['1m', '5m', '1h', '1d'],
-                        priority=1
+                        priority=1,
+                        enabled_strategies=['macd_rsi_strategy', 'ma_crossover_strategy', 'rsi_trend_strategy'],
+                        trading_profile=TradingProfile.SWING_TRADING
                     ) for symbol in default_symbols if symbol.strip()
                 ]
                 self.update_watchlist(default_assets)
@@ -251,6 +490,14 @@ class ConfigManager:
             # Initialize system config if not exists
             if not self.get_system_config():
                 self.update_system_config(self._default_system_config)
+            
+            # Initialize timeframe configs if not exists
+            if not self.get_timeframe_configs():
+                self.update_timeframe_configs(self._default_timeframe_configs)
+            
+            # Initialize strategy matrix if not exists
+            if not self.get_strategy_matrix():
+                self.update_strategy_matrix(self._default_strategy_matrix)
                 
             logger.info("Configuration initialized successfully")
             
@@ -268,7 +515,20 @@ class ConfigManager:
         try:
             cached_data = cache_manager.get(self._config_namespace, "watchlist")
             if cached_data:
-                return [AssetConfig(**asset_data) for asset_data in cached_data]
+                assets = []
+                for asset_data in cached_data:
+                    # Handle backward compatibility for new fields
+                    if 'enabled_strategies' not in asset_data:
+                        asset_data['enabled_strategies'] = []
+                    if 'trading_profile' not in asset_data:
+                        asset_data['trading_profile'] = TradingProfile.SWING_TRADING
+                    elif isinstance(asset_data['trading_profile'], str):
+                        asset_data['trading_profile'] = TradingProfile(asset_data['trading_profile'])
+                    if 'strategy_overrides' not in asset_data:
+                        asset_data['strategy_overrides'] = {}
+                    
+                    assets.append(AssetConfig(**asset_data))
+                return assets
             
             return []
             
@@ -293,11 +553,14 @@ class ConfigManager:
                     logger.warning(f"Symbol {asset.symbol} not in supported symbols list")
             
             # Convert to serializable format
-            asset_data = [asdict(asset) for asset in assets]
-            
-            # Update timestamp for all assets
-            for data in asset_data:
+            asset_data = []
+            for asset in assets:
+                data = asdict(asset)
+                # Convert enum to string for serialization
+                if isinstance(data.get('trading_profile'), TradingProfile):
+                    data['trading_profile'] = data['trading_profile'].value
                 data['last_updated'] = datetime.now().isoformat()
+                asset_data.append(data)
             
             # Store in cache
             success = cache_manager.set(
@@ -319,7 +582,9 @@ class ConfigManager:
             return False
     
     def add_symbol(self, symbol: str, data_provider: str = None, 
-                   timeframes: List[str] = None, priority: int = 1) -> bool:
+                   timeframes: List[str] = None, priority: int = 1,
+                   enabled_strategies: List[str] = None,
+                   trading_profile: TradingProfile = None) -> bool:
         """
         Add a symbol to the watchlist.
         
@@ -328,6 +593,8 @@ class ConfigManager:
             data_provider: Data provider for this symbol
             timeframes: List of timeframes to monitor
             priority: Priority level (higher = more frequent updates)
+            enabled_strategies: List of strategies to enable for this symbol
+            trading_profile: Trading profile for this symbol
             
         Returns:
             True if symbol was added successfully
@@ -347,7 +614,9 @@ class ConfigManager:
                 enabled=True,
                 data_provider=data_provider or os.environ.get('DATA_PROVIDER', 'mock'),
                 timeframes=timeframes or ['1m', '5m', '1h', '1d'],
-                priority=priority
+                priority=priority,
+                enabled_strategies=enabled_strategies or ['macd_rsi_strategy', 'rsi_trend_strategy'],
+                trading_profile=trading_profile or TradingProfile.SWING_TRADING
             )
             
             # Add to watchlist
@@ -460,7 +729,22 @@ class ConfigManager:
         try:
             cached_data = cache_manager.get(self._config_namespace, "strategies")
             if cached_data:
-                return [StrategyConfig(**strategy_data) for strategy_data in cached_data]
+                strategies = []
+                for strategy_data in cached_data:
+                    # Handle backward compatibility for new fields
+                    if 'supported_timeframes' not in strategy_data:
+                        strategy_data['supported_timeframes'] = ['1m', '5m', '1h', '1d']
+                    if 'optimal_timeframe' not in strategy_data:
+                        strategy_data['optimal_timeframe'] = '5m'
+                    if 'trading_profile' not in strategy_data:
+                        strategy_data['trading_profile'] = TradingProfile.SWING_TRADING
+                    elif isinstance(strategy_data['trading_profile'], str):
+                        strategy_data['trading_profile'] = TradingProfile(strategy_data['trading_profile'])
+                    if 'timeframe_parameters' not in strategy_data:
+                        strategy_data['timeframe_parameters'] = {}
+                    
+                    strategies.append(StrategyConfig(**strategy_data))
+                return strategies
             
             return []
             
@@ -479,7 +763,13 @@ class ConfigManager:
             True if update was successful
         """
         try:
-            strategy_data = [asdict(strategy) for strategy in strategies]
+            strategy_data = []
+            for strategy in strategies:
+                data = asdict(strategy)
+                # Convert enum to string for serialization
+                if isinstance(data.get('trading_profile'), TradingProfile):
+                    data['trading_profile'] = data['trading_profile'].value
+                strategy_data.append(data)
             
             success = cache_manager.set(
                 self._config_namespace,
@@ -507,6 +797,177 @@ class ConfigManager:
         """
         strategies = self.get_strategy_configs()
         return [strategy for strategy in strategies if strategy.enabled]
+    
+    def get_timeframe_configs(self) -> Dict[TradingProfile, List[TimeframeConfig]]:
+        """
+        Get current timeframe configurations.
+        
+        Returns:
+            Dictionary mapping trading profiles to their timeframe configs
+        """
+        try:
+            cached_data = cache_manager.get(self._config_namespace, "timeframe_configs")
+            if cached_data:
+                result = {}
+                for profile_str, timeframe_list in cached_data.items():
+                    profile = TradingProfile(profile_str)
+                    result[profile] = [TimeframeConfig(**tf_data) for tf_data in timeframe_list]
+                return result
+            
+            return {}
+            
+        except Exception as e:
+            logger.error(f"Failed to get timeframe configs: {e}")
+            return {}
+    
+    def update_timeframe_configs(self, configs: Dict[TradingProfile, List[TimeframeConfig]]) -> bool:
+        """
+        Update timeframe configurations.
+        
+        Args:
+            configs: Dictionary mapping trading profiles to timeframe configs
+            
+        Returns:
+            True if update was successful
+        """
+        try:
+            # Convert to serializable format
+            serialized_configs = {}
+            for profile, timeframe_configs in configs.items():
+                serialized_configs[profile.value] = [asdict(tf_config) for tf_config in timeframe_configs]
+            
+            success = cache_manager.set(
+                self._config_namespace,
+                "timeframe_configs",
+                serialized_configs,
+                self._cache_ttl
+            )
+            
+            if success:
+                logger.info(f"Updated timeframe configurations for {len(configs)} profiles")
+                self._invalidate_dependent_caches()
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Failed to update timeframe configs: {e}")
+            return False
+    
+    def get_strategy_matrix(self) -> List[StrategyTimeframeMatrix]:
+        """
+        Get current strategy-timeframe matrix.
+        
+        Returns:
+            List of StrategyTimeframeMatrix objects
+        """
+        try:
+            cached_data = cache_manager.get(self._config_namespace, "strategy_matrix")
+            if cached_data:
+                result = []
+                for matrix_data in cached_data:
+                    # Convert trading_profile string back to enum
+                    matrix_data['trading_profile'] = TradingProfile(matrix_data['trading_profile'])
+                    result.append(StrategyTimeframeMatrix(**matrix_data))
+                return result
+            
+            return []
+            
+        except Exception as e:
+            logger.error(f"Failed to get strategy matrix: {e}")
+            return []
+    
+    def update_strategy_matrix(self, matrix: List[StrategyTimeframeMatrix]) -> bool:
+        """
+        Update strategy-timeframe matrix.
+        
+        Args:
+            matrix: List of StrategyTimeframeMatrix objects
+            
+        Returns:
+            True if update was successful
+        """
+        try:
+            # Convert to serializable format
+            matrix_data = []
+            for item in matrix:
+                item_dict = asdict(item)
+                # Convert enum to string
+                item_dict['trading_profile'] = item.trading_profile.value
+                matrix_data.append(item_dict)
+            
+            success = cache_manager.set(
+                self._config_namespace,
+                "strategy_matrix",
+                matrix_data,
+                self._cache_ttl
+            )
+            
+            if success:
+                logger.info(f"Updated strategy matrix with {len(matrix)} entries")
+                self._invalidate_dependent_caches()
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Failed to update strategy matrix: {e}")
+            return False
+    
+    def get_symbol_strategy_configs(self) -> List[SymbolStrategyConfig]:
+        """
+        Get per-symbol strategy configurations.
+        
+        Returns:
+            List of SymbolStrategyConfig objects
+        """
+        try:
+            watchlist = self.get_watchlist()
+            result = []
+            
+            for asset in watchlist:
+                symbol_config = SymbolStrategyConfig(
+                    symbol=asset.symbol,
+                    enabled_strategies=asset.enabled_strategies,
+                    strategy_overrides=asset.strategy_overrides,
+                    trading_profile=asset.trading_profile
+                )
+                result.append(symbol_config)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get symbol strategy configs: {e}")
+            return []
+    
+    def update_symbol_strategy_config(self, symbol: str, config: SymbolStrategyConfig) -> bool:
+        """
+        Update strategy configuration for a specific symbol.
+        
+        Args:
+            symbol: Trading symbol
+            config: SymbolStrategyConfig object
+            
+        Returns:
+            True if update was successful
+        """
+        try:
+            watchlist = self.get_watchlist()
+            
+            # Find and update the asset
+            for asset in watchlist:
+                if asset.symbol == symbol:
+                    asset.enabled_strategies = config.enabled_strategies
+                    asset.strategy_overrides = config.strategy_overrides
+                    asset.trading_profile = config.trading_profile
+                    break
+            else:
+                logger.warning(f"Symbol {symbol} not found in watchlist")
+                return False
+            
+            return self.update_watchlist(watchlist)
+            
+        except Exception as e:
+            logger.error(f"Failed to update symbol strategy config for {symbol}: {e}")
+            return False
     
     def get_system_config(self) -> Optional[SystemConfig]:
         """
@@ -593,6 +1054,114 @@ class ConfigManager:
             logger.error(f"Failed to get configuration summary: {e}")
             return {"error": str(e)}
     
+    def validate_timeframe_strategy_combinations(self) -> Dict[str, List[str]]:
+        """
+        Validate that timeframe-strategy combinations are valid.
+        
+        Returns:
+            Dictionary with validation results
+        """
+        warnings = []
+        errors = []
+        
+        try:
+            strategies = self.get_strategy_configs()
+            matrix = self.get_strategy_matrix()
+            watchlist = self.get_watchlist()
+            
+            # Create lookup for strategy matrix
+            matrix_lookup = {item.strategy_name: item for item in matrix}
+            
+            # Validate each symbol's enabled strategies
+            for asset in watchlist:
+                if not asset.enabled:
+                    continue
+                    
+                for strategy_name in asset.enabled_strategies:
+                    # Check if strategy exists
+                    strategy_config = next((s for s in strategies if s.name == strategy_name), None)
+                    if not strategy_config:
+                        errors.append(f"Strategy '{strategy_name}' not found for symbol {asset.symbol}")
+                        continue
+                    
+                    # Check if strategy is enabled
+                    if not strategy_config.enabled:
+                        warnings.append(f"Strategy '{strategy_name}' is disabled for symbol {asset.symbol}")
+                    
+                    # Check timeframe compatibility
+                    matrix_entry = matrix_lookup.get(strategy_name)
+                    if matrix_entry:
+                        for timeframe in asset.timeframes:
+                            if timeframe not in matrix_entry.supported_timeframes:
+                                warnings.append(
+                                    f"Timeframe '{timeframe}' not supported by strategy '{strategy_name}' "
+                                    f"for symbol {asset.symbol}"
+                                )
+                    
+                    # Check trading profile compatibility
+                    if matrix_entry and asset.trading_profile != matrix_entry.trading_profile:
+                        warnings.append(
+                            f"Trading profile mismatch for symbol {asset.symbol}: "
+                            f"asset={asset.trading_profile.value}, "
+                            f"strategy={matrix_entry.trading_profile.value}"
+                        )
+            
+        except Exception as e:
+            errors.append(f"Validation failed: {e}")
+        
+        return {
+            "warnings": warnings,
+            "errors": errors,
+            "is_valid": len(errors) == 0
+        }
+    
+    def validate_update_intervals(self) -> Dict[str, List[str]]:
+        """
+        Validate that update intervals are appropriate for each trading profile.
+        
+        Returns:
+            Dictionary with validation results
+        """
+        warnings = []
+        errors = []
+        
+        try:
+            timeframe_configs = self.get_timeframe_configs()
+            
+            for profile, configs in timeframe_configs.items():
+                for config in configs:
+                    if not config.validate():
+                        errors.append(f"Invalid timeframe config for {profile.value}: {config.timeframe}")
+                    
+                    # Check reasonable intervals based on profile
+                    if profile == TradingProfile.DAY_TRADING:
+                        if config.timeframe in ['1m', '5m'] and config.update_interval_seconds > 10:
+                            warnings.append(
+                                f"Update interval too slow for day trading on {config.timeframe}: "
+                                f"{config.update_interval_seconds}s"
+                            )
+                    elif profile == TradingProfile.SWING_TRADING:
+                        if config.timeframe in ['1h', '4h'] and config.update_interval_seconds > 3600:
+                            warnings.append(
+                                f"Update interval too slow for swing trading on {config.timeframe}: "
+                                f"{config.update_interval_seconds}s"
+                            )
+                    elif profile == TradingProfile.POSITION_TRADING:
+                        if config.timeframe == '1d' and config.update_interval_seconds > 86400:
+                            warnings.append(
+                                f"Update interval too slow for position trading on {config.timeframe}: "
+                                f"{config.update_interval_seconds}s"
+                            )
+            
+        except Exception as e:
+            errors.append(f"Update interval validation failed: {e}")
+        
+        return {
+            "warnings": warnings,
+            "errors": errors,
+            "is_valid": len(errors) == 0
+        }
+    
     def validate_configuration(self) -> Dict[str, List[str]]:
         """
         Validate current configuration for potential issues.
@@ -645,6 +1214,16 @@ class ConfigManager:
             elif system_config.calculation_workers < 1:
                 errors.append("At least 1 calculation worker is required")
             
+            # Validate timeframe-strategy combinations
+            timeframe_validation = self.validate_timeframe_strategy_combinations()
+            warnings.extend(timeframe_validation["warnings"])
+            errors.extend(timeframe_validation["errors"])
+            
+            # Validate update intervals
+            interval_validation = self.validate_update_intervals()
+            warnings.extend(interval_validation["warnings"])
+            errors.extend(interval_validation["errors"])
+            
         except Exception as e:
             errors.append(f"Configuration validation failed: {e}")
         
@@ -664,6 +1243,157 @@ class ConfigManager:
         except Exception as e:
             logger.warning(f"Failed to invalidate dependent caches: {e}")
     
+    def get_strategy_for_symbol_and_timeframe(self, symbol: str, timeframe: str) -> List[str]:
+        """
+        Get enabled strategies for a specific symbol and timeframe combination.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe string (e.g., '1m', '5m', '1h')
+            
+        Returns:
+            List of enabled strategy names
+        """
+        try:
+            watchlist = self.get_watchlist()
+            matrix = self.get_strategy_matrix()
+            
+            # Find the asset
+            asset = next((a for a in watchlist if a.symbol == symbol), None)
+            if not asset or not asset.enabled:
+                return []
+            
+            # Check if timeframe is supported by the asset
+            if timeframe not in asset.timeframes:
+                return []
+            
+            # Filter strategies by timeframe support
+            matrix_lookup = {item.strategy_name: item for item in matrix}
+            enabled_strategies = []
+            
+            for strategy_name in asset.enabled_strategies:
+                matrix_entry = matrix_lookup.get(strategy_name)
+                if matrix_entry and timeframe in matrix_entry.supported_timeframes:
+                    enabled_strategies.append(strategy_name)
+            
+            return enabled_strategies
+            
+        except Exception as e:
+            logger.error(f"Failed to get strategies for {symbol}@{timeframe}: {e}")
+            return []
+    
+    def get_timeframe_config_for_profile(self, profile: TradingProfile, timeframe: str) -> Optional[TimeframeConfig]:
+        """
+        Get timeframe configuration for a specific trading profile and timeframe.
+        
+        Args:
+            profile: Trading profile
+            timeframe: Timeframe string
+            
+        Returns:
+            TimeframeConfig object or None if not found
+        """
+        try:
+            timeframe_configs = self.get_timeframe_configs()
+            profile_configs = timeframe_configs.get(profile, [])
+            
+            for config in profile_configs:
+                if config.timeframe == timeframe:
+                    return config
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get timeframe config for {profile.value}@{timeframe}: {e}")
+            return None
+    
+    def get_effective_strategy_parameters(self, symbol: str, strategy_name: str, timeframe: str) -> Dict[str, Any]:
+        """
+        Get effective strategy parameters with symbol and timeframe overrides applied.
+        
+        Args:
+            symbol: Trading symbol
+            strategy_name: Strategy name
+            timeframe: Timeframe string
+            
+        Returns:
+            Dictionary of effective parameters
+        """
+        try:
+            # Get base strategy parameters
+            strategies = self.get_strategy_configs()
+            strategy = next((s for s in strategies if s.name == strategy_name), None)
+            if not strategy:
+                return {}
+            
+            # Start with base parameters
+            params = strategy.parameters.copy()
+            
+            # Apply timeframe-specific parameters
+            if timeframe in strategy.timeframe_parameters:
+                params.update(strategy.timeframe_parameters[timeframe])
+            
+            # Apply symbol-specific overrides
+            watchlist = self.get_watchlist()
+            asset = next((a for a in watchlist if a.symbol == symbol), None)
+            if asset and strategy_name in asset.strategy_overrides:
+                params.update(asset.strategy_overrides[strategy_name])
+            
+            return params
+            
+        except Exception as e:
+            logger.error(f"Failed to get effective parameters for {symbol}@{strategy_name}@{timeframe}: {e}")
+            return {}
+    
+    def is_strategy_enabled_for_symbol_timeframe(self, symbol: str, strategy_name: str, timeframe: str) -> bool:
+        """
+        Check if a strategy is enabled for a specific symbol and timeframe.
+        
+        Args:
+            symbol: Trading symbol
+            strategy_name: Strategy name
+            timeframe: Timeframe string
+            
+        Returns:
+            True if strategy is enabled and supported for this combination
+        """
+        try:
+            enabled_strategies = self.get_strategy_for_symbol_and_timeframe(symbol, timeframe)
+            return strategy_name in enabled_strategies
+            
+        except Exception as e:
+            logger.error(f"Failed to check strategy enablement for {symbol}@{strategy_name}@{timeframe}: {e}")
+            return False
+    
+    def get_optimal_timeframe_for_strategy(self, strategy_name: str) -> Optional[str]:
+        """
+        Get the optimal timeframe for a strategy.
+        
+        Args:
+            strategy_name: Strategy name
+            
+        Returns:
+            Optimal timeframe string or None if not found
+        """
+        try:
+            matrix = self.get_strategy_matrix()
+            matrix_entry = next((m for m in matrix if m.strategy_name == strategy_name), None)
+            
+            if matrix_entry:
+                return matrix_entry.optimal_timeframe
+            
+            # Fallback to strategy config
+            strategies = self.get_strategy_configs()
+            strategy = next((s for s in strategies if s.name == strategy_name), None)
+            if strategy:
+                return strategy.optimal_timeframe
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get optimal timeframe for {strategy_name}: {e}")
+            return None
+    
     def reset_to_defaults(self) -> bool:
         """
         Reset all configuration to defaults.
@@ -676,7 +1406,9 @@ class ConfigManager:
             success = (
                 self.update_indicator_configs(self._default_indicators) and
                 self.update_strategy_configs(self._default_strategies) and
-                self.update_system_config(self._default_system_config)
+                self.update_system_config(self._default_system_config) and
+                self.update_timeframe_configs(self._default_timeframe_configs) and
+                self.update_strategy_matrix(self._default_strategy_matrix)
             )
             
             # Reset watchlist to environment defaults
@@ -687,7 +1419,9 @@ class ConfigManager:
                     enabled=True,
                     data_provider=os.environ.get('DATA_PROVIDER', 'mock'),
                     timeframes=['1m', '5m', '1h', '1d'],
-                    priority=1
+                    priority=1,
+                    enabled_strategies=['macd_rsi_strategy', 'ma_crossover_strategy', 'rsi_trend_strategy'],
+                    trading_profile=TradingProfile.SWING_TRADING
                 ) for symbol in default_symbols if symbol.strip()
             ]
             success = success and self.update_watchlist(default_assets)
