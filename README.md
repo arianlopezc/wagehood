@@ -12,6 +12,7 @@ Wagehood is a trading system for systematic traders and quantitative researchers
 - **Real-Time Market Data Processing** with sub-second updates
 - **Global CLI Interface** - Run `wagehood` from anywhere with 50+ commands
 - **Strategy Analysis & Optimization** - Analyze which strategies work best for your trading style
+- **Comprehensive Strategy Documentation** - Detailed explanations of signal logic and parameters
 - **CLI Interface** with installation, configuration, and service management
 - **System Architecture** with Redis Streams, authentication, and monitoring
 - **Alpaca Markets Integration** for live trading and commission-free execution
@@ -238,7 +239,10 @@ wagehood data latest SPY
 # 5. Analyze which strategies work best for your trading style
 wagehood analyze strategy-effectiveness SPY
 
-# 6. Monitor system performance
+# 6. Get detailed explanation of strategy logic
+wagehood analyze explain-strategy macd_rsi
+
+# 7. Monitor system performance
 wagehood monitor health
 ```
 
@@ -377,6 +381,15 @@ wagehood analyze compare-strategies macd_rsi rsi_trend --symbol TSLA
 # List all available strategies
 wagehood analyze list-strategies
 wagehood analyze list-strategies --format json
+
+# Get detailed strategy explanations
+wagehood analyze explain-strategy macd_rsi
+wagehood analyze explain-strategy sr_breakout --format json
+wagehood analyze explain-strategy  # Show all strategies overview
+
+# View period-based returns analysis
+wagehood analyze period-returns macd_rsi AAPL
+wagehood analyze period-returns ma_crossover MSFT --period 6m --format json
 
 # Test with mock data for development
 wagehood analyze strategy-effectiveness SPY --use-mock-data
@@ -606,6 +619,167 @@ $ wagehood analyze strategy-effectiveness SPY --use-mock-data
 4. **Validate Results**: Test with different symbols and time periods
 5. **Paper Trade First**: Always validate strategies with paper trading before live implementation
 6. **Monitor Performance**: Regularly re-analyze as market conditions change
+
+## 📖 Strategy Documentation & Explanations
+
+### Understanding Strategy Logic
+
+The system includes comprehensive documentation for all trading strategies, accessible through the CLI. Each strategy explanation covers:
+
+- **Signal Generation Logic**: Exact conditions for buy/sell signals
+- **Parameter Configuration**: Default values with descriptions and ranges
+- **Confidence Calculation**: How signal confidence scores are computed
+- **Special Features**: Unique capabilities and advantages
+- **Usage Guidelines**: Best trading styles and market conditions
+
+### Strategy Explanation Command
+
+```bash
+# View detailed explanation for a specific strategy
+wagehood analyze explain-strategy macd_rsi
+
+# Get structured JSON output for integration
+wagehood analyze explain-strategy bollinger_breakout --format json
+
+# Show overview of all available strategies
+wagehood analyze explain-strategy
+```
+
+### Example Output
+
+When you run `wagehood analyze explain-strategy macd_rsi`, you'll see:
+
+```
+MACD + RSI Combined Strategy
+High-performance momentum strategy combining MACD trend detection with RSI 
+timing. Documented 73% win rate.
+
+ Difficulty:        Intermediate                                                
+ Signal Frequency:  Medium (selective entries)                                  
+ Best For:          Momentum trading, Trend following, Short to medium-term     
+                    trades                                                      
+
+🟢 BUY SIGNALS
+
+MACD Bullish Crossover + RSI Exit from Oversold:
+  • MACD line crosses ABOVE signal line
+  • RSI moves ABOVE 30 (from below 30)
+
+MACD Bullish Crossover + RSI Uptrend + Positive Momentum:
+  • MACD line crosses ABOVE signal line
+  • RSI is ABOVE 50 (uptrend zone)
+  • MACD histogram is POSITIVE
+
+🔴 SELL SIGNALS
+
+MACD Bearish Crossover + RSI Exit from Overbought:
+  • MACD line crosses BELOW signal line
+  • RSI moves BELOW 70 (from above 70)
+
+⚙️ DEFAULT PARAMETERS
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Parameter           ┃ Default ┃ Description                     ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ macd_fast           │      12 │ MACD fast EMA period            │
+│ macd_slow           │      26 │ MACD slow EMA period            │
+│ rsi_period          │      14 │ RSI calculation period          │
+│ min_confidence      │     0.6 │ Minimum signal confidence (60%) │
+└─────────────────────┴─────────┴─────────────────────────────────┘
+
+🎯 CONFIDENCE CALCULATION
+┏━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Factor        ┃ Weight ┃ Description                             ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Macd Strength │  25%   │ Distance between MACD and signal lines  │
+│ Rsi Position  │  25%   │ How close RSI is to oversold/overbought │
+│ Volume        │  15%   │ Current volume vs 20-day average        │
+└───────────────┴────────┴─────────────────────────────────────────┘
+
+✨ SPECIAL FEATURES
+  • Only executes signals with ≥60% confidence
+  • Divergence detection for reversal opportunities
+  • Volume confirmation with 20-day average
+```
+
+### Available Strategy Documentation
+
+| Strategy | Key | Difficulty | Frequency | Focus |
+|----------|-----|------------|-----------|--------|
+| **MACD + RSI Combined** | `macd_rsi` | Intermediate | Medium | Momentum + timing |
+| **Moving Average Crossover** | `ma_crossover` | Beginner | Low | Trend following |
+| **RSI Trend Following** | `rsi_trend` | Intermediate | Medium | Trend + pullbacks |
+| **Bollinger Band Breakout** | `bollinger_breakout` | Intermediate | Medium | Volatility expansion |
+| **Support/Resistance Breakout** | `sr_breakout` | Advanced | Low | Key level trading |
+
+### Integration with Analysis
+
+Use strategy explanations alongside performance analysis:
+
+```bash
+# 1. Analyze strategy effectiveness
+wagehood analyze strategy-effectiveness SPY
+
+# 2. Get detailed explanation of top performer
+wagehood analyze explain-strategy macd_rsi
+
+# 3. Compare similar strategies
+wagehood analyze compare-strategies macd_rsi rsi_trend
+
+# 4. Understand the logic behind the winner
+wagehood analyze explain-strategy rsi_trend --format json
+```
+
+## 📈 Period-Based Returns Analysis
+
+### Overview
+
+The period-based returns analysis provides detailed insight into how strategies perform across different time horizons. This feature tracks daily, weekly, and monthly returns along with Year-to-Date (YTD) performance metrics.
+
+### Period Returns Command
+
+```bash
+# Analyze period returns for a strategy and symbol
+wagehood analyze period-returns macd_rsi AAPL
+
+# Use different time periods
+wagehood analyze period-returns ma_crossover MSFT --period 6m
+
+# Get structured JSON output
+wagehood analyze period-returns bollinger_breakout TSLA --format json
+
+# Test with mock data
+wagehood analyze period-returns rsi_trend SPY --mock-data
+```
+
+### Key Metrics Provided
+
+**Daily Returns:**
+- Individual trading day performance
+- Cumulative daily return progression
+- Daily P&L and percentage changes
+
+**Weekly Returns:**
+- Week-over-week performance analysis
+- Weekly trend identification
+- Volatility patterns across weeks
+
+**Monthly Returns:**
+- Month-over-month strategic performance
+- Seasonal performance patterns
+- Long-term trend analysis
+
+**Year-to-Date (YTD) Performance:**
+- Current year cumulative returns
+- YTD versus historical comparison
+- Annual performance tracking
+
+### Use Cases
+
+1. **Performance Review**: Track how strategies perform over specific periods
+2. **Volatility Analysis**: Identify periods of high/low strategy volatility
+3. **Seasonal Patterns**: Discover if strategies work better in certain months
+4. **Risk Assessment**: Understand drawdown patterns across time periods
+5. **Strategy Tuning**: Optimize parameters based on period-specific performance
 
 ### Integration with Backtesting
 

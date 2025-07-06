@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
+from ..strategy_explanations import get_strategy_explanation, list_available_strategies, get_strategy_summary
+
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -450,6 +452,174 @@ class StrategyAnalyzer:
         return max(scores, key=scores.get)
 
 
+class PeriodReturnFormatter:
+    """Formatter for period-based return results"""
+    
+    def __init__(self, formatter: OutputFormatter):
+        self.formatter = formatter
+        self.console = formatter.console
+    
+    def format_period_returns(self, backtest_result, output_format: str = "table") -> None:
+        """Format and display period return results"""
+        if output_format == "json":
+            self._format_json(backtest_result)
+        else:
+            self._format_table(backtest_result)
+    
+    def _format_json(self, result) -> None:
+        """Format period returns as JSON"""
+        metrics = result.performance_metrics
+        output = {
+            "strategy": result.strategy_name,
+            "symbol": result.symbol,
+            "period": f"{result.start_date.date()} to {result.end_date.date()}",
+            "total_return": f"{metrics.total_return_pct:.2f}%",
+            "ytd_return": f"{metrics.ytd_return:.2f}%" if metrics.ytd_start_date else "N/A",
+            "ytd_start_date": metrics.ytd_start_date.date().isoformat() if metrics.ytd_start_date else None,
+            "period_statistics": {
+                "daily": {
+                    "average": f"{metrics.avg_daily_return:.2f}%",
+                    "best": f"{metrics.best_day_return:.2f}%",
+                    "worst": f"{metrics.worst_day_return:.2f}%",
+                    "periods": len(metrics.daily_returns)
+                },
+                "weekly": {
+                    "average": f"{metrics.avg_weekly_return:.2f}%",
+                    "best": f"{metrics.best_week_return:.2f}%",
+                    "worst": f"{metrics.worst_week_return:.2f}%",
+                    "periods": len(metrics.weekly_returns)
+                },
+                "monthly": {
+                    "average": f"{metrics.avg_monthly_return:.2f}%",
+                    "best": f"{metrics.best_month_return:.2f}%",
+                    "worst": f"{metrics.worst_month_return:.2f}%",
+                    "periods": len(metrics.monthly_returns)
+                }
+            },
+            "recent_periods": {
+                "daily": [
+                    {
+                        "date": r.period_start.date().isoformat(),
+                        "return": f"{r.return_pct:.2f}%",
+                        "pnl": f"${r.pnl:.2f}",
+                        "trades": r.trades_count
+                    }
+                    for r in metrics.daily_returns[-10:]  # Last 10 days
+                ],
+                "weekly": [
+                    {
+                        "week": f"{r.period_start.date()} to {r.period_end.date()}",
+                        "return": f"{r.return_pct:.2f}%",
+                        "pnl": f"${r.pnl:.2f}",
+                        "trades": r.trades_count
+                    }
+                    for r in metrics.weekly_returns[-5:]  # Last 5 weeks
+                ],
+                "monthly": [
+                    {
+                        "month": f"{r.period_start.strftime('%Y-%m')}",
+                        "return": f"{r.return_pct:.2f}%",
+                        "pnl": f"${r.pnl:.2f}",
+                        "trades": r.trades_count
+                    }
+                    for r in metrics.monthly_returns  # All months
+                ]
+            }
+        }
+        
+        self.console.print(json.dumps(output, indent=2))
+    
+    def _format_table(self, result) -> None:
+        """Format period returns as rich tables"""
+        metrics = result.performance_metrics
+        
+        # Show header
+        self.console.print(f"\n[bold]Period Returns Analysis[/bold]")
+        self.console.print(f"Strategy: [green]{result.strategy_name}[/green]")
+        self.console.print(f"Symbol: [blue]{result.symbol}[/blue]")
+        self.console.print(f"Period: {result.start_date.date()} to {result.end_date.date()}")
+        self.console.print(f"Total Return: [{'green' if metrics.total_return_pct > 0 else 'red'}]{metrics.total_return_pct:.2f}%[/]")
+        
+        # Show YTD return if available
+        if metrics.ytd_start_date:
+            ytd_color = 'green' if metrics.ytd_return > 0 else 'red'
+            self.console.print(f"YTD Return: [{ytd_color}]{metrics.ytd_return:.2f}%[/] (since {metrics.ytd_start_date.date()})")
+        
+        self.console.print()
+        
+        # Summary statistics table
+        summary_table = Table(title="Period Return Summary")
+        summary_table.add_column("Period", style="bold")
+        summary_table.add_column("Average Return", justify="right")
+        summary_table.add_column("Best Period", justify="right", style="green")
+        summary_table.add_column("Worst Period", justify="right", style="red")
+        summary_table.add_column("Count", justify="center")
+        
+        summary_table.add_row(
+            "Daily",
+            f"{metrics.avg_daily_return:.2f}%",
+            f"{metrics.best_day_return:.2f}%",
+            f"{metrics.worst_day_return:.2f}%",
+            str(len(metrics.daily_returns))
+        )
+        summary_table.add_row(
+            "Weekly",
+            f"{metrics.avg_weekly_return:.2f}%",
+            f"{metrics.best_week_return:.2f}%",
+            f"{metrics.worst_week_return:.2f}%",
+            str(len(metrics.weekly_returns))
+        )
+        summary_table.add_row(
+            "Monthly",
+            f"{metrics.avg_monthly_return:.2f}%",
+            f"{metrics.best_month_return:.2f}%",
+            f"{metrics.worst_month_return:.2f}%",
+            str(len(metrics.monthly_returns))
+        )
+        
+        self.console.print(summary_table)
+        self.console.print()
+        
+        # Recent daily returns (last 10 days)
+        if metrics.daily_returns:
+            daily_table = Table(title="Recent Daily Returns (Last 10 Days)")
+            daily_table.add_column("Date", style="bold")
+            daily_table.add_column("Return %", justify="right")
+            daily_table.add_column("P&L", justify="right")
+            daily_table.add_column("Trades", justify="center")
+            
+            for daily_return in metrics.daily_returns[-10:]:
+                color = "green" if daily_return.return_pct > 0 else "red" if daily_return.return_pct < 0 else "white"
+                daily_table.add_row(
+                    daily_return.period_start.date().isoformat(),
+                    f"[{color}]{daily_return.return_pct:.2f}%[/]",
+                    f"[{color}]${daily_return.pnl:.2f}[/]",
+                    str(daily_return.trades_count)
+                )
+            
+            self.console.print(daily_table)
+            self.console.print()
+        
+        # Monthly returns table
+        if metrics.monthly_returns:
+            monthly_table = Table(title="Monthly Returns")
+            monthly_table.add_column("Month", style="bold")
+            monthly_table.add_column("Return %", justify="right")
+            monthly_table.add_column("P&L", justify="right")
+            monthly_table.add_column("Trades", justify="center")
+            
+            for monthly_return in metrics.monthly_returns:
+                color = "green" if monthly_return.return_pct > 0 else "red" if monthly_return.return_pct < 0 else "white"
+                monthly_table.add_row(
+                    monthly_return.period_start.strftime('%Y-%m'),
+                    f"[{color}]{monthly_return.return_pct:.2f}%[/]",
+                    f"[{color}]${monthly_return.pnl:.2f}[/]",
+                    str(monthly_return.trades_count)
+                )
+            
+            self.console.print(monthly_table)
+
+
 class AnalysisFormatter:
     """Formatter for analysis results"""
     
@@ -785,6 +955,85 @@ def compare_strategies(ctx, strategies, symbol, period, output_format, use_mock_
 
 
 @analyze.command()
+@click.argument('strategy_name')
+@click.argument('symbol', default='AAPL')
+@click.option('--period', default='1y', help='Analysis period (e.g., 1y, 6m, 3m)')
+@click.option('--format', '-f', 'output_format',
+              type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.option('--mock-data', is_flag=True, default=False,
+              help='Use mock data instead of live market data')
+@click.pass_context
+def period_returns(ctx, strategy_name, symbol, period, output_format, mock_data):
+    """
+    Show detailed period-based returns for a strategy.
+    
+    Displays daily, weekly, and monthly returns along with performance
+    statistics for the specified strategy and symbol.
+    
+    Examples:
+        wagehood analyze period-returns macd_rsi AAPL
+        wagehood analyze period-returns ma_crossover MSFT --period 6m
+    """
+    config = ctx.obj['config']
+    formatter = ctx.obj['formatter']
+    console = ctx.obj['console']
+    
+    # Validate strategy
+    if strategy_name not in STRATEGY_REGISTRY:
+        console.print(f"[red]Invalid strategy: {strategy_name}[/red]")
+        console.print(f"Available strategies: {', '.join(STRATEGY_REGISTRY.keys())}")
+        return
+    
+    try:
+        with console.status("[bold green]Running backtest and calculating returns..."):
+            # Run backtest for the specific strategy
+            strategy_class = STRATEGY_REGISTRY[strategy_name]
+            strategy = strategy_class()
+            
+            # Get market data
+            from src.data.mock_generator import MockDataGenerator
+            from src.core.models import MarketData, TimeFrame
+            from datetime import datetime
+            
+            if not mock_data:
+                console.print("[yellow]Live data not implemented yet, using mock data[/yellow]")
+            
+            mock_gen = MockDataGenerator()
+            # Convert period to number of days
+            period_days = 252 if period == '1y' else 126 if period == '6m' else 63 if period == '3m' else 30
+            
+            ohlcv_data = mock_gen.generate_realistic_data(
+                symbol=symbol,
+                periods=period_days,
+                timeframe=TimeFrame.DAILY
+            )
+            
+            data = MarketData(
+                symbol=symbol,
+                timeframe=TimeFrame.DAILY,
+                data=ohlcv_data,
+                indicators={},
+                last_updated=datetime.now()
+            )
+            
+            # Run backtest
+            from src.backtest.engine import BacktestEngine
+            engine = BacktestEngine()
+            result = engine.run_backtest(strategy, data)
+            
+        # Format and display results
+        period_formatter = PeriodReturnFormatter(formatter)
+        period_formatter.format_period_returns(result, output_format)
+        
+    except Exception as e:
+        console.print(f"[red]Error calculating period returns: {str(e)}[/red]")
+        if hasattr(config, 'verbose') and config.verbose:
+            import traceback
+            traceback.print_exc()
+
+
+@analyze.command()
 @click.option('--format', '-f', 'output_format',
               type=click.Choice(['table', 'json']), default='table',
               help='Output format')
@@ -828,6 +1077,176 @@ def list_strategies(ctx, output_format):
     console.print("wagehood analyze strategy-effectiveness SPY")
     console.print("wagehood analyze strategy-effectiveness AAPL --strategies ma_crossover macd_rsi")
     console.print("wagehood analyze compare-strategies ma_crossover macd_rsi bollinger_breakout")
+
+
+@analyze.command()
+@click.argument('strategy_name', required=False)
+@click.option('--format', '-f', 'output_format',
+              type=click.Choice(['table', 'json']), default='table',
+              help='Output format')
+@click.pass_context
+def explain_strategy(ctx, strategy_name, output_format):
+    """
+    Get detailed explanations of trading strategy logic.
+    
+    Shows exactly when buy/sell signals are generated, confidence calculations,
+    parameters, and usage guidelines for any strategy.
+    
+    Examples:
+        wagehood analyze explain-strategy macd_rsi
+        wagehood analyze explain-strategy ma_crossover --format json
+        wagehood analyze explain-strategy  # Shows all strategies
+    """
+    formatter = ctx.obj['formatter']
+    console = ctx.obj['console']
+    
+    if not strategy_name:
+        # Show all strategies summary
+        if output_format == 'json':
+            summaries = get_strategy_summary()
+            console.print(json.dumps(summaries, indent=2))
+        else:
+            _show_all_strategies_summary(console)
+        return
+    
+    # Get explanation for specific strategy
+    explanation = get_strategy_explanation(strategy_name)
+    
+    if not explanation:
+        console.print(f"[red]Strategy '{strategy_name}' not found.[/red]")
+        console.print(f"Available strategies: {', '.join(list_available_strategies())}")
+        return
+    
+    if output_format == 'json':
+        console.print(json.dumps(explanation, indent=2))
+    else:
+        _show_strategy_explanation(console, explanation)
+
+
+def _show_all_strategies_summary(console):
+    """Show summary of all available strategies"""
+    from rich.table import Table
+    
+    console.print(f"\n[bold]Available Trading Strategies[/bold]")
+    console.print()
+    
+    table = Table()
+    table.add_column("Strategy", style="bold")
+    table.add_column("Name", style="cyan")
+    table.add_column("Difficulty", justify="center")
+    table.add_column("Frequency", justify="center")
+    table.add_column("Description", style="dim")
+    
+    summaries = get_strategy_summary()
+    for strategy_key, summary in summaries.items():
+        difficulty_color = {
+            "Beginner": "green",
+            "Intermediate": "yellow", 
+            "Advanced": "red"
+        }.get(summary["difficulty"], "white")
+        
+        frequency_color = {
+            "Low": "red",
+            "Medium": "yellow",
+            "High": "green"
+        }.get(summary["frequency"].split()[0], "white")
+        
+        table.add_row(
+            strategy_key,
+            summary["name"],
+            f"[{difficulty_color}]{summary['difficulty']}[/]",
+            f"[{frequency_color}]{summary['frequency']}[/]",
+            summary["description"][:60] + "..." if len(summary["description"]) > 60 else summary["description"]
+        )
+    
+    console.print(table)
+    console.print()
+    console.print("[dim]Use 'wagehood analyze explain-strategy [STRATEGY_NAME]' for detailed explanations[/dim]")
+
+
+def _show_strategy_explanation(console, explanation):
+    """Show detailed strategy explanation"""
+    from rich.table import Table
+    from rich.panel import Panel
+    
+    # Header
+    console.print(f"\n[bold blue]{explanation['name']}[/bold blue]")
+    console.print(f"[dim]{explanation['description']}[/dim]")
+    console.print()
+    
+    # Strategy info
+    info_table = Table(show_header=False, box=None)
+    info_table.add_column("Label", style="bold")
+    info_table.add_column("Value")
+    
+    difficulty_color = {
+        "Beginner": "green",
+        "Intermediate": "yellow",
+        "Advanced": "red"
+    }.get(explanation["difficulty"], "white")
+    
+    info_table.add_row("Difficulty:", f"[{difficulty_color}]{explanation['difficulty']}[/]")
+    info_table.add_row("Signal Frequency:", explanation["frequency"])
+    info_table.add_row("Best For:", ", ".join(explanation["best_for"]))
+    
+    console.print(info_table)
+    console.print()
+    
+    # Buy Signals
+    console.print("[bold green]🟢 BUY SIGNALS[/bold green]")
+    for signal_type, signal_info in explanation["buy_signals"].items():
+        console.print(f"\n[bold]{signal_info['description']}:[/bold]")
+        for condition in signal_info["conditions"]:
+            console.print(f"  • {condition}")
+    console.print()
+    
+    # Sell Signals  
+    console.print("[bold red]🔴 SELL SIGNALS[/bold red]")
+    for signal_type, signal_info in explanation["sell_signals"].items():
+        console.print(f"\n[bold]{signal_info['description']}:[/bold]")
+        for condition in signal_info["conditions"]:
+            console.print(f"  • {condition}")
+    console.print()
+    
+    # Parameters
+    console.print("[bold]⚙️ DEFAULT PARAMETERS[/bold]")
+    params_table = Table()
+    params_table.add_column("Parameter", style="bold")
+    params_table.add_column("Default", justify="right")
+    params_table.add_column("Description")
+    
+    for param_name, param_info in explanation["parameters"].items():
+        params_table.add_row(
+            param_name,
+            str(param_info["default"]),
+            param_info["description"]
+        )
+    
+    console.print(params_table)
+    console.print()
+    
+    # Confidence Calculation
+    console.print("[bold]🎯 CONFIDENCE CALCULATION[/bold]")
+    conf_table = Table()
+    conf_table.add_column("Factor", style="bold")
+    conf_table.add_column("Weight", justify="center")
+    conf_table.add_column("Description")
+    
+    for factor_name, factor_info in explanation["confidence_factors"].items():
+        conf_table.add_row(
+            factor_name.replace("_", " ").title(),
+            factor_info["weight"],
+            factor_info["description"]
+        )
+    
+    console.print(conf_table)
+    console.print()
+    
+    # Special Features
+    console.print("[bold]✨ SPECIAL FEATURES[/bold]")
+    for feature in explanation["special_features"]:
+        console.print(f"  • {feature}")
+    console.print()
 
 
 # Export the command group
