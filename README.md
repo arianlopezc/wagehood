@@ -1,6 +1,6 @@
 # Wagehood Trading Analysis System
 
-**A trading analysis platform with real-time market data processing, 5 trading strategies, backtesting capabilities, and technical analysis tools. Built as a CLI system that can be run from any directory.**
+**A Redis-based worker service for real-time market analysis with CLI tools for strategy analysis, market monitoring, and backtesting. Built with data processing and trading strategy evaluation capabilities.**
 
 ## 🚀 Overview
 
@@ -9,26 +9,56 @@ Wagehood is a trading system for systematic traders and quantitative researchers
 ### Key Features
 
 - **5 Trading Strategies** with documented win rates up to 73%
-- **Real-Time Market Data Processing** with sub-second updates
-- **Global CLI Interface** - Run `wagehood` from anywhere with 50+ commands
+- **Redis-Based Worker Service** with real-time market data processing
+- **CLI Tools** - Market analysis and monitoring interfaces
 - **Strategy Analysis & Optimization** - Analyze which strategies work best for your trading style
-- **Comprehensive Strategy Documentation** - Detailed explanations of signal logic and parameters
-- **CLI Interface** with installation, configuration, and service management
-- **System Architecture** with Redis Streams, authentication, and monitoring
+- **Strategy Documentation** - Detailed explanations of signal logic and parameters
+- **Real-Time Processing** with Redis Streams for event-driven architecture
 - **Alpaca Markets Integration** for live trading and commission-free execution
 - **Testing Suite** with code coverage tracking
 
 ## 🎯 Core Trading Strategies
 
+### Multi-Strategy Multi-Timeframe System
+
+The system supports multi-dimensional analysis across:
+- **5 trading strategies** with documented performance
+- **9 timeframes** from 1-minute to monthly
+- **3 trading profiles** (Day, Swing, Position)
+- **Watchlist management**
+
 ### Implemented Strategies
 
-| Strategy | Win Rate | Avg Return | Max Drawdown | Best Timeframe | Description |
-|----------|----------|------------|--------------|----------------|-------------|
-| **MACD+RSI Combined** | 73% | 0.88%/trade | -15% | Daily | Momentum-based strategy |
-| **RSI Trend Following** | 68% | 0.6%/trade | -12% | 4H/Daily | Trend-aware RSI signals |
-| **Bollinger Band Breakout** | 65% | 0.9%/trade | -18% | Daily | Volatility-based breakouts |
-| **Support/Resistance Breakout** | 58% | 1.4%/trade | -22% | Daily | Level-based trading |
-| **Moving Average Crossover** | 45% | 2.1%/trade | -8% | Daily/Weekly | Golden/Death cross detection |
+| Strategy | Win Rate | Avg Return | Best Timeframes | Trading Profile | Description |
+|----------|----------|------------|----------------|-----------------|-------------|
+| **MACD+RSI Combined** | 73% | 0.88%/trade | 1h, 4h, 1d | Swing/Position | Momentum strategy combining MACD and RSI |
+| **RSI Trend Following** | 68% | 0.6%/trade | 15m, 30m, 1h | Day/Swing | Trend-aware RSI with pullbacks |
+| **Bollinger Band Breakout** | 65% | 0.9%/trade | 5m, 15m, 1h | Day/Swing | Volatility expansion strategy |
+| **Support/Resistance Breakout** | 58% | 1.4%/trade | 1h, 4h, 1d | Swing/Position | Level-based breakout trading |
+| **Moving Average Crossover** | 45% | 2.1%/trade | 1d, 1w, 1M | Position | Golden/Death cross signals |
+
+### Trading Profiles
+
+**Day Trading Profile:**
+- **Timeframes:** 1m, 5m, 15m
+- **Focus:** High-frequency signals, quick profits
+- **Best Strategies:** RSI Trend, Bollinger Breakout
+- **Capital Requirements:** $25,000+ (PDT rule)
+- **Time Commitment:** Active monitoring required
+
+**Swing Trading Profile:**
+- **Timeframes:** 30m, 1h, 4h  
+- **Focus:** Multi-day positions (2-10 days)
+- **Best Strategies:** MACD+RSI, RSI Trend, Bollinger Breakout
+- **Capital Requirements:** $5,000-$25,000
+- **Time Commitment:** Daily monitoring
+
+**Position Trading Profile:**
+- **Timeframes:** 1d, 1w, 1M
+- **Focus:** Long-term positions (weeks to months)
+- **Best Strategies:** Moving Average Crossover, Support/Resistance Breakout
+- **Capital Requirements:** $1,000+
+- **Time Commitment:** Weekly monitoring
 
 ### Strategy Assets Classification
 
@@ -47,8 +77,8 @@ Wagehood is a trading system for systematic traders and quantitative researchers
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Market Data     │───▶│ Redis Streams   │───▶│ Real-time       │
-│ (Alpaca/Mock)   │    │ (Event Bus)     │    │ Processing      │
+│ Market Data     │───▶│ Redis Streams   │───▶│ Worker Service  │
+│ (Alpaca/Mock)   │    │ (Event Bus)     │    │ (run_realtime)  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -57,8 +87,8 @@ Wagehood is a trading system for systematic traders and quantitative researchers
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ CLI Interface   │◀───│ Data Services   │◀───│ Analysis &      │
-│ (wagehood)      │    │ & Storage       │    │ Backtesting     │
+│ CLI Tools       │◀───│ Data Services   │◀───│ Analysis &      │
+│ (market_*_cli)  │    │ & Storage       │    │ Backtesting     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -71,12 +101,17 @@ src/
 │   └── providers/      # Alpaca, mock, and extensible providers
 ├── indicators/         # 20+ technical indicator calculations
 ├── strategies/         # 5 trading strategy implementations  
-├── backtest/           # Backtesting engine with realistic execution
+├── backtest/           # Backtesting engine with execution simulation
 ├── realtime/           # Real-time processing and data ingestion
-├── cli/               # Command-line interface (50+ commands)
+├── services/           # Analysis and data services
 ├── trading/           # Live trading integration (Alpaca)
 ├── analysis/          # Performance evaluation and comparison
 └── storage/           # Results storage and caching
+
+CLI Tools:
+├── market_analysis_cli.py  # Market analysis interface
+├── market_watch.py        # Real-time market monitoring
+└── run_realtime.py       # Worker service startup script
 ```
 
 ## 📊 Technical Indicators
@@ -108,7 +143,7 @@ src/
 
 ## 🚀 Quick Start
 
-> **💡 Global CLI Access**: After installation, you can run `wagehood` from anywhere on your system - no need to navigate to the project directory or use `./wagehood_cli.py`!
+> **💡 Worker Service Architecture**: The system runs as a Redis-based worker service with dedicated CLI tools for market analysis and monitoring.
 
 ### Prerequisites
 
@@ -127,23 +162,7 @@ redis-server
 
 ### Installation
 
-#### 🚀 Quick Install (Recommended)
-
-```bash
-# Run the automated installer for global CLI access
-curl -sSL https://raw.githubusercontent.com/your-repo/wagehood/main/install.sh | bash
-```
-
-Or download and run locally:
-```bash
-wget https://raw.githubusercontent.com/your-repo/wagehood/main/install.sh
-chmod +x install.sh
-./install.sh
-```
-
-The installer automatically sets up the global `wagehood` command that can be run from anywhere.
-
-#### 📋 Manual Installation
+#### 📋 Standard Installation
 
 ```bash
 # 1. Clone repository
@@ -152,16 +171,13 @@ cd wagehood
 
 # 2. Install Python dependencies
 pip install -r requirements.txt
-pip install cryptography  # Required for CLI security features
 
-# 3. Install globally for CLI access
+# 3. Install in development mode
 pip install -e .
 
-# 4. Run interactive setup
-wagehood install setup
 
-# 5. Install auto-start service (optional)
-wagehood service install
+# 4. Verify installation
+python -m src.core.models  # Test core imports
 ```
 
 #### 🔧 Development Installation
@@ -173,27 +189,26 @@ cd wagehood
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 2. Install in development mode
+# 2. Install dependencies
+pip install -r requirements.txt
 pip install -e .
 
-# 3. Install CLI dependencies
-pip install cryptography redis alpaca-py
-
-# 4. Run setup wizard
-wagehood install setup
+# 3. Run tests to verify setup
+python run_tests.py --unit
 ```
 
 #### ✅ Verify Installation
 
 ```bash
-# Check CLI is working
-wagehood --version
+# Test Redis connection
+redis-cli ping
 
-# Check system health
-wagehood install status
+# Test market data generation
+python -c "from src.data.providers.mock_provider import MockProvider; print('Mock provider working')"
 
-# View available commands
-wagehood --help
+# Test CLI tools
+python market_analysis_cli.py --help
+python market_watch.py --help
 ```
 
 ### Basic Usage
@@ -221,201 +236,373 @@ print(f"Sharpe Ratio: {result.performance_metrics.sharpe_ratio:.2f}")
 
 ### Quick Start Guide
 
-After installation, you can run the `wagehood` command from anywhere. Follow these steps to get your trading system running:
+Follow these steps to get your multi-strategy multi-timeframe trading system running:
 
 ```bash
-# 1. Run the interactive setup wizard
-wagehood install setup
+# 1. Install dependencies
+pip install -r requirements.txt
+pip install -e .
 
-# 2. Check that everything is configured correctly
-wagehood install status
+# 2. Start Redis server
+redis-server
 
-# 3. Start the real-time data processing (optional)
-wagehood install start --realtime-only
+# 3. Configure environment (copy and edit .env.example)
+cp .env.example .env
+# Edit .env with your settings
 
-# 4. Test with market data
-wagehood data latest SPY
+# 4. Run comprehensive tests to verify setup
+python run_tests.py --all
 
-# 5. Analyze which strategies work best for your trading style
-wagehood analyze strategy-effectiveness SPY
+# 5. Use the Python API for trading analysis
+python -c "
+from src.strategies import create_strategy, get_all_strategies
+from src.data.mock_generator import MockDataGenerator
+from src.backtest.engine import BacktestEngine
 
-# 6. Get detailed explanation of strategy logic
-wagehood analyze explain-strategy macd_rsi
+# Generate test data
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=252)
 
-# 7. Monitor system performance
-wagehood monitor health
+# Test a strategy
+strategy = create_strategy('macd_rsi')
+engine = BacktestEngine()
+result = engine.run_backtest(strategy, data, initial_capital=10000)
+print(f'MACD+RSI Strategy Result: {result.performance_metrics.total_return_pct:.2%} return')
+"
+
+# 6. Explore all available strategies
+python -c "
+from src.strategies import get_all_strategies
+strategies = get_all_strategies()
+for name, meta in strategies.items():
+    print(f'{meta[\"name\"]}: {meta[\"description\"]}')
+"
 ```
 
-## 🖥️ Command Line Interface
+## 🖥️ Python API Interface
 
-The Wagehood CLI provides system management through a command-line interface. After installation, you can run `wagehood` from anywhere on your system.
+The Wagehood system provides a Python API for multi-strategy multi-timeframe analysis. The system has moved away from CLI tools to a programmatic interface.
 
-### Core Commands
+### Core Python API
 
-#### 🔧 Installation & Configuration
-```bash
-# Interactive system setup wizard
-wagehood install setup
+**Strategy Analysis:**
+```python
+from src.strategies import create_strategy, get_all_strategies, STRATEGY_METADATA
+from src.data.mock_generator import MockDataGenerator
+from src.backtest.engine import BacktestEngine
 
-# Check system health and configuration
-wagehood install status
+# Explore available strategies
+strategies = get_all_strategies()
+for name, metadata in strategies.items():
+    print(f"{metadata['name']}: {metadata['description']}")
+    print(f"Difficulty: {metadata['difficulty']}")
+    print(f"Priority: {metadata['priority']}")
 
-# Update existing configuration
-wagehood install configure
+# Create and test a strategy
+strategy = create_strategy('macd_rsi')
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=252)
 
-# Service management
-wagehood install start        # Start all services
-wagehood install stop         # Stop all services
-wagehood install restart      # Restart services
+engine = BacktestEngine()
+result = engine.run_backtest(strategy, data, initial_capital=10000)
+print(f"Total Return: {result.performance_metrics.total_return_pct:.2%}")
 ```
 
-#### ⚙️ Auto-Start Service Management
-```bash
-# Install auto-start service
-wagehood service install
+**Multi-Strategy Comparison:**
+```python
+from src.analysis.comparison import StrategyComparator
 
-# Check service status
-wagehood service status
+# Compare multiple strategies
+comparator = StrategyComparator()
+strategies_to_test = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
 
-# Enable/disable auto-start
-wagehood service enable
-wagehood service disable
+results = {}
+for strategy_name in strategies_to_test:
+    strategy = create_strategy(strategy_name)
+    result = engine.run_backtest(strategy, data, initial_capital=10000)
+    results[strategy_name] = result
 
-# Manual service control
-wagehood service start
-wagehood service stop
-wagehood service restart
+# Analyze results
+for name, result in results.items():
+    metrics = result.performance_metrics
+    print(f"{name}: {metrics.total_return_pct:.2%} return, {metrics.win_rate:.1%} win rate")
 ```
 
-#### 📊 Data & Market Operations
-```bash
-# Get latest market data
-wagehood data latest SPY
+**Real-time Data Processing:**
+```python
+from src.realtime.data_ingestion import DataIngestionManager
+from src.realtime.signal_engine import SignalEngine
+from src.realtime.timeframe_manager import TimeframeManager
 
-# Stream real-time data
-wagehood data stream AAPL TSLA --duration 60
+# Set up real-time processing (requires Redis)
+data_manager = DataIngestionManager()
+signal_engine = SignalEngine()
+timeframe_manager = TimeframeManager()
 
-# View available symbols
-wagehood data symbols
+# Configure multi-timeframe analysis
+symbols = ['SPY', 'QQQ', 'AAPL']
+timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
+strategies = ['macd_rsi', 'rsi_trend', 'bollinger_breakout']
 
-# Add symbols to watchlist
-wagehood config watchlist add AAPL TSLA NVDA
-
-# Check performance stats
-wagehood monitor stats
+# Process real-time signals
+# Note: This requires running Redis server
 ```
 
-### Command Categories
+### Testing and Validation
 
-#### Data Commands
+**Testing:**
 ```bash
-# Latest market data
-wagehood data latest SPY
+# Run all tests including strategy validation
+python run_tests.py --all
 
-# Get indicators for a symbol
-wagehood data indicators SPY -i sma_20 -i rsi
+# Run specific test categories
+python run_tests.py --unit
+python run_tests.py --integration
+python run_tests.py --performance
 
-# Get trading signals
-wagehood data signals SPY --strategy ma_crossover
-
-# Real-time streaming
-wagehood data stream SPY QQQ --duration 300
-
-# Historical data with date filtering
-wagehood data historical AAPL --start-date 2024-01-01 --indicator sma_20
-
-# Export data in multiple formats
-wagehood data export create SPY --format csv --start-date 2024-01-01
-wagehood data export download exp_123456
+# Run tests with coverage
+python run_tests.py --coverage
 ```
 
-#### Configuration Commands
-```bash
-# Watchlist management
-wagehood config watchlist show
-wagehood config watchlist add AAPL TSLA NVDA MSFT
-wagehood config watchlist remove TSLA
+**Strategy Validation:**
+```python
+# Validate strategy implementations
+python -c "
+from src.strategies import STRATEGY_REGISTRY
+from src.data.mock_generator import MockDataGenerator
 
-# Indicator configuration
-wagehood config indicators show
-wagehood config indicators update new_indicators.json
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=100)
 
-# Strategy configuration
-wagehood config strategies show
-wagehood config strategies update updated_strategies.json
-
-# CLI settings
-wagehood config set --output-format json
-wagehood config set --log-level INFO
+for name, strategy_class in STRATEGY_REGISTRY.items():
+    try:
+        strategy = strategy_class()
+        signals = strategy.generate_signals(data)
+        print(f'✓ {name}: Generated {len(signals)} signals')
+    except Exception as e:
+        print(f'✗ {name}: Error - {e}')
+"
 ```
 
-#### Monitoring Commands
-```bash
-# System health checks
-wagehood monitor health --detailed
+### Usage Examples
 
-# Performance statistics
-wagehood monitor stats --live
-wagehood monitor stats --component ingestion
+#### Multi-Strategy Portfolio Analysis
+```python
+# Create a multi-strategy analysis
+from src.strategies import DEFAULT_STRATEGY_PARAMS, create_strategy
+from src.data.mock_generator import MockDataGenerator
+from src.backtest.engine import BacktestEngine
+import pandas as pd
 
-# System alerts
-wagehood monitor alerts --type error --since "1 hour ago"
+# Generate realistic market data
+generator = MockDataGenerator()
+symbols = ['SPY', 'QQQ', 'AAPL', 'MSFT']
+strategies = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
 
-# Live monitoring dashboard
-wagehood monitor live --components ingestion,calculation
+# Portfolio analysis
+portfolio_results = {}
+for symbol in symbols:
+    data = generator.generate_realistic_data(symbol, periods=252)
+    symbol_results = {}
+    
+    for strategy_name in strategies:
+        strategy = create_strategy(strategy_name)
+        engine = BacktestEngine()
+        result = engine.run_backtest(strategy, data, initial_capital=10000)
+        
+        symbol_results[strategy_name] = {
+            'total_return': result.performance_metrics.total_return_pct,
+            'win_rate': result.performance_metrics.win_rate,
+            'sharpe_ratio': result.performance_metrics.sharpe_ratio,
+            'max_drawdown': result.performance_metrics.max_drawdown_pct
+        }
+    
+    portfolio_results[symbol] = symbol_results
 
-# Connectivity testing
-wagehood monitor ping --count 10 --interval 1
+# Display results
+for symbol, strategies_data in portfolio_results.items():
+    print(f"\n{symbol} Analysis:")
+    for strategy, metrics in strategies_data.items():
+        print(f"  {strategy}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
 ```
 
-#### Analysis Commands
-```bash
-# Analyze strategy effectiveness for a symbol
-wagehood analyze strategy-effectiveness SPY
-wagehood analyze strategy-effectiveness AAPL --period 6m --format json
+#### Real-time Signal Generation
+```python
+# Set up real-time multi-timeframe signal generation
+from src.realtime.signal_engine import SignalEngine
+from src.realtime.config_manager import ConfigManager
+from src.core.models import TimeFrame
 
-# Compare specific strategies
-wagehood analyze compare-strategies ma_crossover macd_rsi bollinger_breakout
-wagehood analyze compare-strategies macd_rsi rsi_trend --symbol TSLA
+# Configure signal engine
+config = ConfigManager()
+signal_engine = SignalEngine(config)
 
-# List all available strategies
-wagehood analyze list-strategies
-wagehood analyze list-strategies --format json
+# Configure trading profiles
+day_trading_timeframes = [TimeFrame.MINUTE_1, TimeFrame.MINUTE_5, TimeFrame.MINUTE_15]
+swing_trading_timeframes = [TimeFrame.MINUTE_30, TimeFrame.HOUR_1, TimeFrame.HOUR_4]
+position_trading_timeframes = [TimeFrame.DAILY, TimeFrame.WEEKLY, TimeFrame.MONTHLY]
 
-# Get detailed strategy explanations
-wagehood analyze explain-strategy macd_rsi
-wagehood analyze explain-strategy sr_breakout --format json
-wagehood analyze explain-strategy  # Show all strategies overview
-
-# View period-based returns analysis
-wagehood analyze period-returns macd_rsi AAPL
-wagehood analyze period-returns ma_crossover MSFT --period 6m --format json
-
-# Test with mock data for development
-wagehood analyze strategy-effectiveness SPY --use-mock-data
+# Monitor symbols across different timeframes
+symbols = ['SPY', 'QQQ', 'AAPL']
+for symbol in symbols:
+    # Day trading signals
+    day_signals = signal_engine.generate_signals(symbol, day_trading_timeframes, ['rsi_trend', 'bollinger_breakout'])
+    
+    # Swing trading signals  
+    swing_signals = signal_engine.generate_signals(symbol, swing_trading_timeframes, ['macd_rsi', 'rsi_trend'])
+    
+    # Position trading signals
+    position_signals = signal_engine.generate_signals(symbol, position_trading_timeframes, ['ma_crossover'])
+    
+    print(f"{symbol}: Day: {len(day_signals)}, Swing: {len(swing_signals)}, Position: {len(position_signals)} signals")
 ```
 
-#### Administrative Commands
-```bash
-# Service management
-wagehood install start --realtime-only
-wagehood install start --host 0.0.0.0 --port 8080
-wagehood admin service status
+#### Custom Strategy Development
+```python
+# Create a custom strategy combining multiple indicators
+from src.strategies.base import TradingStrategy
+from src.core.models import Signal, SignalType
+from src.indicators.momentum import RSICalculator
+from src.indicators.moving_averages import EMACalculator
 
-# Cache management
-wagehood admin cache clear --type data
-wagehood admin cache clear --type all
+class CustomMomentumStrategy(TradingStrategy):
+    def __init__(self, parameters=None):
+        super().__init__(parameters)
+        self.rsi_calculator = RSICalculator(period=14)
+        self.ema_calculator = EMACalculator(period=20)
+    
+    def generate_signals(self, market_data):
+        signals = []
+        
+        # Calculate indicators
+        rsi_values = self.rsi_calculator.calculate(market_data.data)
+        ema_values = self.ema_calculator.calculate(market_data.data)
+        
+        for i in range(len(market_data.data)):
+            if i < 20:  # Need enough data
+                continue
+                
+            current_price = market_data.data[i].close
+            rsi = rsi_values[i]
+            ema = ema_values[i]
+            
+            # Custom signal logic
+            if rsi < 30 and current_price > ema:
+                signal = Signal(
+                    timestamp=market_data.data[i].timestamp,
+                    symbol=market_data.symbol,
+                    signal_type=SignalType.BUY,
+                    price=current_price,
+                    confidence=0.8,
+                    strategy_name="custom_momentum"
+                )
+                signals.append(signal)
+            elif rsi > 70 and current_price < ema:
+                signal = Signal(
+                    timestamp=market_data.data[i].timestamp,
+                    symbol=market_data.symbol,
+                    signal_type=SignalType.SELL,
+                    price=current_price,
+                    confidence=0.8,
+                    strategy_name="custom_momentum"
+                )
+                signals.append(signal)
+        
+        return signals
 
-# Log management
-wagehood admin logs show --level ERROR --limit 100
-wagehood admin logs show --component ingestion
+# Test custom strategy
+custom_strategy = CustomMomentumStrategy()
+data = generator.generate_realistic_data('SPY', periods=252)
+signals = custom_strategy.generate_signals(data)
+print(f"Custom strategy generated {len(signals)} signals")
+```
 
-# Backup & restore
-wagehood admin backup create
-wagehood admin backup restore backup_20240101_120000
+#### Data Analysis and Backtesting
+```python
+# Backtesting across multiple scenarios
+from src.data.mock_generator import MockDataGenerator
+from src.backtest.engine import BacktestEngine
+from src.strategies import create_strategy
 
-# Maintenance tasks
-wagehood admin maintenance run
+def analyze_strategy_across_conditions(strategy_name, conditions):
+    """Analyze strategy performance across different market conditions."""
+    results = {}
+    
+    for condition_name, generator_params in conditions.items():
+        generator = MockDataGenerator(**generator_params)
+        data = generator.generate_realistic_data('SPY', periods=252)
+        
+        strategy = create_strategy(strategy_name)
+        engine = BacktestEngine()
+        result = engine.run_backtest(strategy, data, initial_capital=10000)
+        
+        results[condition_name] = {
+            'total_return': result.performance_metrics.total_return_pct,
+            'win_rate': result.performance_metrics.win_rate,
+            'sharpe_ratio': result.performance_metrics.sharpe_ratio,
+            'max_drawdown': result.performance_metrics.max_drawdown_pct
+        }
+    
+    return results
+
+# Test different market conditions
+market_conditions = {
+    'bull_market': {'trend': 'bullish', 'volatility': 0.15},
+    'bear_market': {'trend': 'bearish', 'volatility': 0.25},
+    'sideways_market': {'trend': 'sideways', 'volatility': 0.10},
+    'high_volatility': {'trend': 'neutral', 'volatility': 0.35}
+}
+
+# Analyze MACD+RSI strategy across conditions
+results = analyze_strategy_across_conditions('macd_rsi', market_conditions)
+for condition, metrics in results.items():
+    print(f"{condition}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
+```
+
+#### Performance Comparison and Optimization
+```python
+# Performance comparison with parameter optimization
+from src.strategies import DEFAULT_STRATEGY_PARAMS, create_strategy
+import itertools
+
+def optimize_strategy_parameters(strategy_name, symbol, param_ranges):
+    """Optimize strategy parameters using grid search."""
+    best_result = None
+    best_params = None
+    best_return = -float('inf')
+    
+    # Generate parameter combinations
+    param_names = list(param_ranges.keys())
+    param_values = list(param_ranges.values())
+    
+    for params_combo in itertools.product(*param_values):
+        params = dict(zip(param_names, params_combo))
+        
+        # Test this parameter combination
+        generator = MockDataGenerator()
+        data = generator.generate_realistic_data(symbol, periods=252)
+        
+        strategy = create_strategy(strategy_name, params)
+        engine = BacktestEngine()
+        result = engine.run_backtest(strategy, data, initial_capital=10000)
+        
+        if result.performance_metrics.total_return_pct > best_return:
+            best_return = result.performance_metrics.total_return_pct
+            best_params = params
+            best_result = result
+    
+    return best_result, best_params
+
+# Example: Optimize RSI parameters
+rsi_param_ranges = {
+    'rsi_period': [10, 14, 18, 21],
+    'rsi_oversold': [25, 30, 35],
+    'rsi_overbought': [65, 70, 75]
+}
+
+best_result, best_params = optimize_strategy_parameters('rsi_trend', 'SPY', rsi_param_ranges)
+print(f"Best parameters: {best_params}")
+print(f"Best return: {best_result.performance_metrics.total_return_pct:.2%}")
 ```
 
 ### Output Formats
@@ -429,12 +616,12 @@ QQQ       395.21   -1.87     8,765,432    58.91   -0.23
 
 **JSON Format:**
 ```bash
-wagehood data latest SPY -f json
+python market_analysis_cli.py data --symbol SPY --format json
 ```
 
 **CSV Format:**
 ```bash
-wagehood data latest SPY QQQ -f csv
+python market_analysis_cli.py export --symbol SPY --format csv
 ```
 
 ## 📊 Strategy Analysis
@@ -484,41 +671,41 @@ The Strategy Analysis feature helps traders determine which strategies work best
 #### 1. Strategy Effectiveness Analysis
 ```bash
 # Analyze all strategies for a symbol
-wagehood analyze strategy-effectiveness SPY
+python market_analysis_cli.py analyze --symbol SPY
 
 # Analyze specific strategies
-wagehood analyze strategy-effectiveness AAPL --strategies ma_crossover macd_rsi
+python market_analysis_cli.py analyze --symbol AAPL --strategies ma_crossover,macd_rsi
 
 # Use different time periods
-wagehood analyze strategy-effectiveness TSLA --period 6m
-wagehood analyze strategy-effectiveness QQQ --period 2y
+python market_analysis_cli.py analyze --symbol TSLA --period 6m
+python market_analysis_cli.py analyze --symbol QQQ --period 2y
 
 # Get JSON output for programmatic use
-wagehood analyze strategy-effectiveness SPY --format json
+python market_analysis_cli.py analyze --symbol SPY --format json
 
 # Test with mock data (development)
-wagehood analyze strategy-effectiveness SPY --use-mock-data
+python market_analysis_cli.py analyze --symbol SPY --use-mock-data
 ```
 
 #### 2. Strategy Comparison
 ```bash
 # Compare 2-5 specific strategies
-wagehood analyze compare-strategies ma_crossover macd_rsi
+python market_analysis_cli.py compare --strategies ma_crossover,macd_rsi
 
 # Compare with different symbol/period
-wagehood analyze compare-strategies macd_rsi rsi_trend bollinger_breakout --symbol AAPL --period 1y
+python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend,bollinger_breakout --symbol AAPL --period 1y
 
 # Get detailed comparison in JSON format
-wagehood analyze compare-strategies ma_crossover macd_rsi --format json
+python market_analysis_cli.py compare --strategies ma_crossover,macd_rsi --format json
 ```
 
 #### 3. List Available Strategies
 ```bash
 # Show all strategies with metadata
-wagehood analyze list-strategies
+python market_analysis_cli.py strategies
 
 # Get machine-readable output
-wagehood analyze list-strategies --format json
+python market_analysis_cli.py strategies --format json
 ```
 
 ### Interpreting Results
@@ -555,14 +742,14 @@ Average Hold Time: 4.2 days
 
 #### Recommendation Guidelines
 
-**Excellent (0.8-1.0)**: Highly recommended for this trading style
-- Strategy shows strong performance across multiple metrics
-- Well-suited for the time horizon and risk profile
-- Expected to generate consistent returns
+**Excellent (0.8-1.0)**: Recommended for this trading style
+- Strategy shows good performance across multiple metrics
+- Suitable for the time horizon and risk profile
+- Expected to generate returns
 
-**Good (0.6-0.8)**: Recommended with some considerations
-- Solid performance with minor areas for improvement
-- Good fit for the trading style with reasonable expectations
+**Good (0.6-0.8)**: Acceptable with some considerations
+- Good performance with minor areas for improvement
+- Fits the trading style with reasonable expectations
 - May require additional risk management
 
 **Fair (0.4-0.6)**: Acceptable but not optimal
@@ -579,12 +766,12 @@ Average Hold Time: 4.2 days
 
 #### Example 1: Finding the Best Strategy for SPY
 ```bash
-$ wagehood analyze strategy-effectiveness SPY
+$ python market_analysis_cli.py analyze --symbol SPY
 
 Strategy Effectiveness Analysis for SPY
 Analysis Period: 1y
 Strategies Analyzed: 5
-Data Source: Alpaca Markets
+Data Source: Worker Service
 
 Summary Recommendations:
 1. MACD+RSI Combined - Best for Swing Trading
@@ -597,7 +784,7 @@ Summary Recommendations:
 
 #### Example 2: Comparing Momentum Strategies
 ```bash
-$ wagehood analyze compare-strategies macd_rsi rsi_trend --symbol AAPL
+$ python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend --symbol AAPL
 
 # This will show a direct comparison of the two momentum-based strategies
 # highlighting which performs better for different trading styles
@@ -606,7 +793,7 @@ $ wagehood analyze compare-strategies macd_rsi rsi_trend --symbol AAPL
 #### Example 3: Development and Testing
 ```bash
 # Test analysis with mock data during development
-$ wagehood analyze strategy-effectiveness SPY --use-mock-data
+$ python market_analysis_cli.py analyze --symbol SPY --use-mock-data
 
 # This generates realistic market data for testing without API calls
 ```
@@ -624,7 +811,7 @@ $ wagehood analyze strategy-effectiveness SPY --use-mock-data
 
 ### Understanding Strategy Logic
 
-The system includes comprehensive documentation for all trading strategies, accessible through the CLI. Each strategy explanation covers:
+The system includes documentation for all trading strategies, accessible through the CLI. Each strategy explanation covers:
 
 - **Signal Generation Logic**: Exact conditions for buy/sell signals
 - **Parameter Configuration**: Default values with descriptions and ranges
@@ -636,18 +823,18 @@ The system includes comprehensive documentation for all trading strategies, acce
 
 ```bash
 # View detailed explanation for a specific strategy
-wagehood analyze explain-strategy macd_rsi
+python market_analysis_cli.py explain --strategy macd_rsi
 
 # Get structured JSON output for integration
-wagehood analyze explain-strategy bollinger_breakout --format json
+python market_analysis_cli.py explain --strategy bollinger_breakout --format json
 
 # Show overview of all available strategies
-wagehood analyze explain-strategy
+python market_analysis_cli.py strategies --detailed
 ```
 
 ### Example Output
 
-When you run `wagehood analyze explain-strategy macd_rsi`, you'll see:
+When you run `python market_analysis_cli.py explain --strategy macd_rsi`, you'll see:
 
 ```
 MACD + RSI Combined Strategy
@@ -709,7 +896,7 @@ MACD Bearish Crossover + RSI Exit from Overbought:
 | **Moving Average Crossover** | `ma_crossover` | Beginner | Low | Trend following |
 | **RSI Trend Following** | `rsi_trend` | Intermediate | Medium | Trend + pullbacks |
 | **Bollinger Band Breakout** | `bollinger_breakout` | Intermediate | Medium | Volatility expansion |
-| **Support/Resistance Breakout** | `sr_breakout` | Advanced | Low | Key level trading |
+| **Support/Resistance Breakout** | `sr_breakout` | Complex | Low | Key level trading |
 
 ### Integration with Analysis
 
@@ -717,16 +904,16 @@ Use strategy explanations alongside performance analysis:
 
 ```bash
 # 1. Analyze strategy effectiveness
-wagehood analyze strategy-effectiveness SPY
+python market_analysis_cli.py analyze --symbol SPY
 
 # 2. Get detailed explanation of top performer
-wagehood analyze explain-strategy macd_rsi
+python market_analysis_cli.py explain --strategy macd_rsi
 
 # 3. Compare similar strategies
-wagehood analyze compare-strategies macd_rsi rsi_trend
+python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend
 
 # 4. Understand the logic behind the winner
-wagehood analyze explain-strategy rsi_trend --format json
+python market_analysis_cli.py explain --strategy rsi_trend --format json
 ```
 
 ## 📈 Period-Based Returns Analysis
@@ -739,16 +926,16 @@ The period-based returns analysis provides detailed insight into how strategies 
 
 ```bash
 # Analyze period returns for a strategy and symbol
-wagehood analyze period-returns macd_rsi AAPL
+python market_analysis_cli.py period-returns --strategy macd_rsi --symbol AAPL
 
 # Use different time periods
-wagehood analyze period-returns ma_crossover MSFT --period 6m
+python market_analysis_cli.py period-returns --strategy ma_crossover --symbol MSFT --period 6m
 
 # Get structured JSON output
-wagehood analyze period-returns bollinger_breakout TSLA --format json
+python market_analysis_cli.py period-returns --strategy bollinger_breakout --symbol TSLA --format json
 
 # Test with mock data
-wagehood analyze period-returns rsi_trend SPY --mock-data
+python market_analysis_cli.py period-returns --strategy rsi_trend --symbol SPY --mock-data
 ```
 
 ### Key Metrics Provided
@@ -986,7 +1173,7 @@ logging:
 
 ## 📈 Performance Characteristics
 
-### Target Metrics
+### Performance Targets
 
 - **Data Ingestion**: 1-second updates per asset
 - **Calculation Latency**: <100ms per indicator update
@@ -996,9 +1183,9 @@ logging:
 
 ### Real-Time Processing
 
-- **Target: Sub-second Updates**: Real-time market data processing
-- **Goal: Efficient Calculations**: Optimized updates for most indicators
-- **Redis Streams**: Event-driven architecture designed for reliable delivery
+- **Target: Sub-second Updates**: Market data processing frequency
+- **Optimized Calculations**: Efficient updates for most indicators
+- **Redis Streams**: Event-driven architecture for message delivery
 - **Circuit Breakers**: Fault tolerance for external data feeds
 - **Horizontal Scaling**: Add workers for more symbols
 
@@ -1022,7 +1209,7 @@ logging:
 
 ### Test Suite
 
-Run the complete test suite with 90%+ coverage:
+Run the test suite with target 90%+ coverage:
 
 ```bash
 # Install dependencies and run all tests
@@ -1087,7 +1274,8 @@ RUN pip install -r requirements.txt
 
 COPY src/ src/
 COPY run_realtime.py .
-COPY wagehood_cli.py .
+COPY market_analysis_cli.py .
+COPY market_watch.py .
 RUN pip install -e .
 
 CMD ["python", "run_realtime.py"]
@@ -1158,21 +1346,21 @@ spec:
 
 ```bash
 # System health check
-wagehood install status
+python market_analysis_cli.py --help
 
 # Performance metrics
-wagehood monitor stats
+python market_watch.py --symbols SPY --duration 10
 
 # System ping test
-wagehood monitor ping
+redis-cli ping
 ```
 
 ### Monitoring & Observability
 
-**Built-in Monitoring:**
+**System Monitoring:**
 - Structured JSON logging for aggregation
 - Prometheus-compatible metrics export
-- Kubernetes-ready health checks  
+- Kubernetes-compatible health checks  
 - Configurable alerting via Redis Streams
 
 **Available Metrics:**
@@ -1202,7 +1390,7 @@ wagehood monitor ping
 - **Environment Variables**: Never commit secrets to version control
 - **Redis Security**: Use AUTH and TLS for production
 - **Credential Rotation**: Regular API key updates
-- **Audit Logging**: Comprehensive activity tracking
+- **Audit Logging**: Activity tracking
 
 ## 🛠️ Troubleshooting
 
@@ -1222,14 +1410,14 @@ echo $REDIS_HOST $REDIS_PORT
 
 #### System Connection Errors
 ```bash
-# Test system connectivity
-wagehood monitor ping
+# Test CLI connectivity
+python market_analysis_cli.py --help
 
-# Check if services are running
-wagehood install status
+# Check if worker service is running
+ps aux | grep run_realtime.py
 
 # Start real-time processing
-wagehood install start --realtime-only
+python run_realtime.py
 ```
 
 #### No Data Processing
@@ -1253,7 +1441,7 @@ python scripts/setup_alpaca.py
 echo $ALPACA_API_KEY $ALPACA_SECRET_KEY
 
 # Verify account status
-wagehood admin logs show --component alpaca
+python run_realtime.py --provider alpaca --log-level DEBUG
 ```
 
 #### High Memory Usage
@@ -1265,31 +1453,31 @@ redis-cli info memory
 export REDIS_STREAMS_MAXLEN=5000
 
 # Check system metrics
-wagehood monitor stats
+python market_analysis_cli.py --help
 ```
 
 ### Debug Mode
 
 ```bash
 # Enable verbose logging
-wagehood -v data latest SPY
-wagehood --verbose monitor health
+python market_analysis_cli.py --verbose data --symbol SPY
+python market_watch.py --debug
 
 # Check specific component logs
 grep "CalculationEngine" realtime_processor_*.log
 grep "MarketDataIngestion" realtime_processor_*.log
 
 # Monitor logs in real-time
-tail -f ~/.wagehood/cli.log
+python run_realtime.py --log-level DEBUG
 ```
 
 ### Performance Optimization
 
-1. **Use caching**: CLI caches recent data for faster responses
-2. **Batch operations**: Process multiple symbols together
-3. **Limit output**: Use `--limit` for large datasets
-4. **Stream carefully**: Monitor bandwidth usage
-5. **Optimize Redis**: Tune memory and connection settings
+1. **Use caching**: Redis caches recent data for faster responses
+2. **Batch operations**: Process multiple symbols together with worker service
+3. **Limit output**: Use `--limit` for large datasets in CLI tools
+4. **Stream carefully**: Monitor bandwidth usage with market_watch.py
+5. **Optimize Redis**: Tune memory and connection settings for worker service
 
 ## 📚 Research Foundation
 
@@ -1303,7 +1491,7 @@ The system implements strategies based on quantitative analysis methods:
 
 ### Performance Validation
 
-All strategies have been thoroughly backtested across:
+All strategies have been backtested across:
 - **Multiple Market Conditions**: Bull, bear, sideways, high/low volatility
 - **Various Asset Classes**: Stocks, ETFs, commodities, forex, crypto
 - **Different Timeframes**: 1-minute to monthly analysis
@@ -1314,7 +1502,7 @@ All strategies have been thoroughly backtested across:
 1. **Fork the repository**
 2. **Create feature branch**: `git checkout -b feature/amazing-feature`
 3. **Follow coding standards**: Use Black, Flake8, and MyPy
-4. **Add comprehensive tests**: Maintain 90%+ coverage
+4. **Add tests**: Maintain 90%+ coverage
 5. **Update documentation**: Include examples and usage
 6. **Run test suite**: `pytest tests/ --cov=src`
 7. **Commit changes**: `git commit -m 'Add amazing feature'`
@@ -1327,7 +1515,7 @@ All strategies have been thoroughly backtested across:
 - **Type Hints**: Full type annotation coverage
 - **Documentation**: Google-style docstrings
 - **Testing**: Unit, integration, and performance tests
-- **Error Handling**: Comprehensive exception handling
+- **Error Handling**: Exception handling
 - **Security**: Input validation and secure coding practices
 
 ## 📄 License
@@ -1342,6 +1530,6 @@ This software is for educational and research purposes only. Past performance do
 
 ---
 
-**Built for systematic traders and quantitative researchers**
+**For systematic traders and quantitative researchers**
 
 *For additional support and updates, please refer to the project documentation and community forums.*

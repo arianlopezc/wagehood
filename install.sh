@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Wagehood Trading System - Automated Installer
-# This script automates the complete installation and setup of the Wagehood CLI
+# This script automates the complete installation and setup of the Wagehood worker + CLI architecture
 
 set -e  # Exit on any error
 
@@ -49,6 +49,7 @@ echo "║                                                               ║"
 echo "║               WAGEHOOD TRADING SYSTEM INSTALLER               ║"
 echo "║                                                               ║"
 echo "║   Professional-grade real-time trading analysis platform     ║"
+echo "║              Worker + CLI Architecture                        ║"
 echo "║                                                               ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -168,110 +169,65 @@ print_success "Virtual environment activated"
 print_step "Upgrading pip..."
 $PIP_CMD install --upgrade pip
 
-# Install Wagehood package globally
-print_step "Installing Wagehood package..."
-if [[ -f "setup.py" ]]; then
-    # Install in development mode for easier debugging and updates
-    if $PIP_CMD install -e .; then
-        print_success "Wagehood package installed in development mode"
+# Install Python dependencies
+print_step "Installing Python dependencies..."
+if [[ -f "requirements.txt" ]]; then
+    if $PIP_CMD install -r requirements.txt; then
+        print_success "Python dependencies installed successfully"
     else
-        print_error "Failed to install Wagehood package"
+        print_error "Failed to install Python dependencies"
         exit 1
     fi
 else
-    print_error "setup.py not found - cannot install package"
+    print_error "requirements.txt not found - cannot install dependencies"
     exit 1
 fi
 
-# Configure shell profiles for PATH access
-print_step "Configuring shell profiles for global access..."
-
-# Get the pip install location for user packages
-PYTHON_USER_BASE=$($PYTHON_CMD -m site --user-base)
-USER_BIN_DIR="$PYTHON_USER_BASE/bin"
-
-# Add user bin directory to PATH for various shells
-configure_shell_path() {
-    local shell_config="$1"
-    local shell_name="$2"
-    
-    if [[ -f "$shell_config" ]]; then
-        if ! grep -q "$USER_BIN_DIR" "$shell_config" 2>/dev/null; then
-            echo "# Wagehood CLI PATH configuration" >> "$shell_config"
-            echo "export PATH=\"$USER_BIN_DIR:\$PATH\"" >> "$shell_config"
-            print_success "Added PATH configuration to $shell_name ($shell_config)"
-        else
-            print_success "PATH already configured in $shell_name"
-        fi
-    fi
-}
-
-# Configure for bash
-configure_shell_path "$HOME/.bashrc" "bash"
-configure_shell_path "$HOME/.bash_profile" "bash profile"
-
-# Configure for zsh
-configure_shell_path "$HOME/.zshrc" "zsh"
-
-# Configure for fish
-if [[ -d "$HOME/.config/fish" ]]; then
-    FISH_CONFIG="$HOME/.config/fish/config.fish"
-    mkdir -p "$HOME/.config/fish"
-    if [[ ! -f "$FISH_CONFIG" ]] || ! grep -q "$USER_BIN_DIR" "$FISH_CONFIG" 2>/dev/null; then
-        echo "# Wagehood CLI PATH configuration" >> "$FISH_CONFIG"
-        echo "set -gx PATH \"$USER_BIN_DIR\" \$PATH" >> "$FISH_CONFIG"
-        print_success "Added PATH configuration to fish shell"
+# Install Wagehood package in development mode (optional)
+print_step "Installing Wagehood package in development mode..."
+if [[ -f "setup.py" ]]; then
+    if $PIP_CMD install -e .; then
+        print_success "Wagehood package installed in development mode"
     else
-        print_success "PATH already configured in fish shell"
-    fi
-fi
-
-print_success "Shell profiles configured for global CLI access"
-
-# Test CLI installation
-print_step "Testing CLI installation..."
-
-# First, test the local CLI to ensure it works
-if "$INSTALL_DIR/wagehood_cli.py" --version > /dev/null 2>&1; then
-    print_success "Local CLI is working correctly"
-else
-    print_error "Local CLI test failed"
-    exit 1
-fi
-
-# Test global wagehood command
-print_step "Testing global wagehood command..."
-
-# Update PATH for current session
-export PATH="$USER_BIN_DIR:$PATH"
-
-# Test if wagehood command is available globally
-if command -v wagehood > /dev/null 2>&1; then
-    # Test the global command
-    if wagehood --version > /dev/null 2>&1; then
-        print_success "Global 'wagehood' command is working correctly"
-        GLOBAL_CMD_WORKING=true
-    else
-        print_warning "Global 'wagehood' command found but not working properly"
-        GLOBAL_CMD_WORKING=false
+        print_warning "Failed to install Wagehood package in development mode"
+        print_warning "This is optional - the CLI tools will still work directly"
     fi
 else
-    print_warning "Global 'wagehood' command not immediately available"
-    print_warning "This may require restarting your terminal or running 'source ~/.bashrc'"
-    GLOBAL_CMD_WORKING=false
+    print_warning "setup.py not found - skipping package installation"
 fi
 
-# Additional verification: test command from different directory
-print_step "Testing command from different directory..."
-ORIGINAL_DIR=$(pwd)
-cd /tmp
-if command -v wagehood > /dev/null 2>&1 && wagehood --version > /dev/null 2>&1; then
-    print_success "Global command works from any directory"
-    GLOBAL_CMD_WORKING=true
+# Test CLI tools
+print_step "Testing CLI tools..."
+
+# Test market analysis CLI
+print_step "Testing market analysis CLI..."
+if python3 "$INSTALL_DIR/market_analysis_cli.py" --help > /dev/null 2>&1; then
+    print_success "Market analysis CLI is working correctly"
+    MARKET_ANALYSIS_CLI_WORKING=true
 else
-    print_warning "Global command may not work from all directories yet"
+    print_warning "Market analysis CLI test failed - may need Redis connection"
+    MARKET_ANALYSIS_CLI_WORKING=false
 fi
-cd "$ORIGINAL_DIR"
+
+# Test market watch CLI
+print_step "Testing market watch CLI..."
+if python3 "$INSTALL_DIR/market_watch.py" --help > /dev/null 2>&1; then
+    print_success "Market watch CLI is working correctly"
+    MARKET_WATCH_CLI_WORKING=true
+else
+    print_warning "Market watch CLI test failed"
+    MARKET_WATCH_CLI_WORKING=false
+fi
+
+# Test Python import of core modules
+print_step "Testing core module imports..."
+if python3 -c "import sys; sys.path.insert(0, '$INSTALL_DIR/src'); from src.core.models import Signal, Trade, MarketData" 2>/dev/null; then
+    print_success "Core modules import successfully"
+    CORE_MODULES_WORKING=true
+else
+    print_warning "Core modules import failed - some features may not work"
+    CORE_MODULES_WORKING=false
+fi
 
 # Redis installation guidance
 if [[ "$REDIS_AVAILABLE" == false ]]; then
@@ -305,50 +261,38 @@ echo
 echo -e "${BLUE}📍 Installation Details:${NC}"
 echo "   • Installation directory: $INSTALL_DIR"
 echo "   • Virtual environment: $VENV_DIR"
-echo "   • Python package: wagehood (installed globally)"
-echo "   • Global command: wagehood"
-echo "   • Command location: $USER_BIN_DIR/wagehood"
+echo "   • Python dependencies: Installed from requirements.txt"
+echo "   • CLI Tools: market_analysis_cli.py, market_watch.py"
+echo "   • Architecture: Worker + CLI (Redis-based)"
 
 echo
-if [[ "$GLOBAL_CMD_WORKING" == true ]]; then
-    echo -e "${BLUE}🚀 Next Steps (using global command):${NC}"
-    echo
-    echo "1. ${YELLOW}Run the interactive setup:${NC}"
-    echo "   wagehood install setup"
-    echo
-    echo "2. ${YELLOW}Check system status:${NC}"
-    echo "   wagehood install status"
-    echo
-    echo "3. ${YELLOW}Install auto-start service (optional):${NC}"
-    echo "   wagehood service install"
-    echo
-    echo "4. ${YELLOW}Start trading system:${NC}"
-    echo "   wagehood install start"
-    echo
-    echo "5. ${YELLOW}Get help with any command:${NC}"
-    echo "   wagehood --help"
-    echo "   wagehood <command> --help"
+echo -e "${BLUE}🚀 Next Steps:${NC}"
+echo
+echo "1. ${YELLOW}Activate the virtual environment:${NC}"
+echo "   source $VENV_DIR/bin/activate"
+echo
+echo "2. ${YELLOW}Navigate to the installation directory:${NC}"
+echo "   cd $INSTALL_DIR"
+echo
+echo "3. ${YELLOW}Start Redis server (required for real-time features):${NC}"
+if [[ "$REDIS_AVAILABLE" == true ]]; then
+    echo "   redis-server  # Redis is already installed"
 else
-    echo -e "${BLUE}🚀 Next Steps (restart terminal first):${NC}"
-    echo
-    echo "1. ${YELLOW}Restart your terminal or run:${NC}"
-    echo "   source ~/.bashrc  # for bash"
-    echo "   source ~/.zshrc   # for zsh"
-    echo
-    echo "2. ${YELLOW}Verify global command works:${NC}"
-    echo "   wagehood --version"
-    echo
-    echo "3. ${YELLOW}Run the interactive setup:${NC}"
-    echo "   wagehood install setup"
-    echo
-    echo "4. ${YELLOW}Check system status:${NC}"
-    echo "   wagehood install status"
-    echo
-    echo "5. ${YELLOW}Alternative - activate environment manually:${NC}"
-    echo "   source $VENV_DIR/bin/activate"
-    echo "   cd $INSTALL_DIR"
-    echo "   ./wagehood_cli.py install setup"
+    echo "   # Install Redis first (see guidance below)"
 fi
+echo
+echo "4. ${YELLOW}Run the market analysis CLI:${NC}"
+echo "   python3 market_analysis_cli.py --help"
+echo "   python3 market_analysis_cli.py signals"
+echo
+echo "5. ${YELLOW}Run the market watch tool:${NC}"
+echo "   python3 market_watch.py"
+echo
+echo "6. ${YELLOW}Start the real-time processor:${NC}"
+echo "   python3 run_realtime.py"
+echo
+echo "7. ${YELLOW}Run tests to verify everything works:${NC}"
+echo "   python3 run_tests.py"
 echo
 
 if [[ "$REDIS_AVAILABLE" == false ]]; then
@@ -357,120 +301,136 @@ if [[ "$REDIS_AVAILABLE" == false ]]; then
 fi
 
 echo -e "${BLUE}📖 Documentation:${NC}"
-if [[ "$GLOBAL_CMD_WORKING" == true ]]; then
-    echo "   • View all commands: wagehood --help"
-    echo "   • Get help with any command: wagehood <command> --help"
-else
-    echo "   • View all commands: wagehood --help (after restarting terminal)"
-    echo "   • Alternative: ./wagehood_cli.py --help (from $INSTALL_DIR)"
-fi
+echo "   • CLI Usage Guide: $INSTALL_DIR/CLI_USAGE.md"
+echo "   • Market Analysis CLI: python3 market_analysis_cli.py --help"
+echo "   • Market Watch Tool: python3 market_watch.py --help"
+echo "   • Real-time Processor: python3 run_realtime.py --help"
 echo "   • Read the README: $INSTALL_DIR/README.md"
 
 echo
 echo -e "${GREEN}Happy Trading! 📈${NC}"
 echo
 echo -e "${BLUE}💡 Installation Summary:${NC}"
-echo "   The Wagehood CLI has been installed using proper Python packaging."
-echo "   You can now use 'wagehood' command from anywhere on your system."
-if [[ "$GLOBAL_CMD_WORKING" == true ]]; then
-    echo "   ✅ Global command is ready to use immediately!"
+echo "   The Wagehood trading system uses a worker + CLI architecture."
+echo "   CLI tools connect to Redis-based workers for real-time analysis."
+if [[ "$MARKET_ANALYSIS_CLI_WORKING" == true && "$MARKET_WATCH_CLI_WORKING" == true ]]; then
+    echo "   ✅ Both CLI tools are ready to use!"
+elif [[ "$MARKET_ANALYSIS_CLI_WORKING" == true || "$MARKET_WATCH_CLI_WORKING" == true ]]; then
+    echo "   ⚠️  Some CLI tools may need Redis connection to work fully."
 else
-    echo "   ⏳ Global command will be ready after restarting your terminal."
+    echo "   ⚠️  CLI tools may need dependencies or Redis connection."
 fi
 echo
 echo "   🔧 To verify installation later, run:"
-echo "      $INSTALL_DIR/verify_global_install.sh"
+echo "      source $VENV_DIR/bin/activate && cd $INSTALL_DIR"
+echo "      python3 run_tests.py"
 
 # Create activation script for development work
-cat > "$INSTALL_DIR/activate_wagehood.sh" << 'EOF'
+cat > "$INSTALL_DIR/activate_wagehood.sh" << EOF
 #!/bin/bash
-# Wagehood Environment Activation Script for Development
+# Wagehood Environment Activation Script
 echo "Activating Wagehood development environment..."
 source "$VENV_DIR/bin/activate"
 cd "$INSTALL_DIR"
 echo "Development environment activated."
 echo ""
-echo "Available commands:"
-echo "  • Global command: wagehood <command>"
-echo "  • Local development: ./wagehood_cli.py <command>"
-echo "  • Help: wagehood --help or ./wagehood_cli.py --help"
+echo "Available CLI tools:"
+echo "  • Market Analysis: python3 market_analysis_cli.py --help"
+echo "  • Market Watch: python3 market_watch.py"
+echo "  • Real-time Processor: python3 run_realtime.py"
+echo "  • Test Suite: python3 run_tests.py"
 echo ""
-echo "Note: The 'wagehood' command is globally available even outside this environment."
+echo "Architecture: Worker + CLI (Redis-based)"
+echo "Make sure Redis is running for real-time features!"
 EOF
 
 chmod +x "$INSTALL_DIR/activate_wagehood.sh"
 print_success "Created development activation script: $INSTALL_DIR/activate_wagehood.sh"
 
-# Create a global command verification script
-cat > "$INSTALL_DIR/verify_global_install.sh" << 'EOF'
+# Create installation verification script
+cat > "$INSTALL_DIR/verify_install.sh" << EOF
 #!/bin/bash
-# Script to verify global Wagehood installation
+# Script to verify Wagehood installation
 
-echo "🔍 Verifying Wagehood global installation..."
+echo "🔍 Verifying Wagehood installation..."
 echo
 
-# Check if command exists
-if command -v wagehood > /dev/null 2>&1; then
-    echo "✅ 'wagehood' command found in PATH"
-    echo "   Location: $(which wagehood)"
-    
-    # Test the command
-    if wagehood --version > /dev/null 2>&1; then
-        echo "✅ Command is working correctly"
-        echo "   Version: $(wagehood --version 2>/dev/null || echo 'Could not get version')"
-    else
-        echo "❌ Command found but not working properly"
-        exit 1
-    fi
-    
-    # Test from different directory
-    echo
-    echo "Testing from different directory..."
-    ORIGINAL_DIR=$(pwd)
-    cd /tmp
-    if wagehood --version > /dev/null 2>&1; then
-        echo "✅ Command works from any directory"
-    else
-        echo "❌ Command doesn't work from all directories"
-    fi
-    cd "$ORIGINAL_DIR"
-    
+# Check virtual environment
+if [[ -d "$VENV_DIR" ]]; then
+    echo "✅ Virtual environment found: $VENV_DIR"
 else
-    echo "❌ 'wagehood' command not found in PATH"
-    echo
-    echo "Try the following:"
-    echo "1. Restart your terminal"
-    echo "2. Or run: source ~/.bashrc (bash) or source ~/.zshrc (zsh)"
-    echo "3. Or check your PATH contains the user bin directory"
+    echo "❌ Virtual environment not found"
     exit 1
 fi
 
+# Activate virtual environment
+source "$VENV_DIR/bin/activate"
+
+# Check CLI tools
+echo "Testing CLI tools..."
+if python3 market_analysis_cli.py --help > /dev/null 2>&1; then
+    echo "✅ Market Analysis CLI is working"
+else
+    echo "❌ Market Analysis CLI failed"
+fi
+
+if python3 market_watch.py --help > /dev/null 2>&1; then
+    echo "✅ Market Watch CLI is working"
+else
+    echo "❌ Market Watch CLI failed"
+fi
+
+# Check core modules
+echo "Testing core modules..."
+if python3 -c "import sys; sys.path.insert(0, 'src'); from src.core.models import Signal, Trade, MarketData" 2>/dev/null; then
+    echo "✅ Core modules import successfully"
+else
+    echo "❌ Core modules import failed"
+fi
+
+# Check Redis connection (optional)
+echo "Testing Redis connection..."
+if python3 -c "import redis; redis.Redis(host='localhost', port=6379).ping()" 2>/dev/null; then
+    echo "✅ Redis connection successful"
+else
+    echo "⚠️  Redis connection failed - real-time features may not work"
+fi
+
 echo
-echo "🎉 Global installation verification complete!"
+echo "🎉 Installation verification complete!"
+echo "Use './activate_wagehood.sh' to activate the environment."
 EOF
 
-chmod +x "$INSTALL_DIR/verify_global_install.sh"
-print_success "Created verification script: $INSTALL_DIR/verify_global_install.sh"
+chmod +x "$INSTALL_DIR/verify_install.sh"
+print_success "Created verification script: $INSTALL_DIR/verify_install.sh"
 
 # Create uninstall script
-cat > "$INSTALL_DIR/uninstall.sh" << 'EOF'
+cat > "$INSTALL_DIR/uninstall.sh" << EOF
 #!/bin/bash
 # Wagehood Uninstall Script
 
 echo "🗑️  Uninstalling Wagehood..."
 
-# Remove the pip package
-if command -v pip3 > /dev/null 2>&1; then
-    pip3 uninstall wagehood -y
-elif command -v pip > /dev/null 2>&1; then
-    pip uninstall wagehood -y
+# Remove virtual environment
+if [[ -d "$VENV_DIR" ]]; then
+    echo "Removing virtual environment..."
+    rm -rf "$VENV_DIR"
+    echo "✅ Virtual environment removed"
 fi
 
-echo "✅ Wagehood package uninstalled"
+# Optional: Remove the pip package if installed
+if source "$VENV_DIR/bin/activate" 2>/dev/null; then
+    if command -v pip3 > /dev/null 2>&1; then
+        pip3 uninstall wagehood -y 2>/dev/null || echo "No pip package to remove"
+    elif command -v pip > /dev/null 2>&1; then
+        pip uninstall wagehood -y 2>/dev/null || echo "No pip package to remove"
+    fi
+fi
+
+echo "✅ Wagehood components removed"
 echo "📁 Installation directory remains at: $(dirname "$0")"
 echo "   You can manually remove it if desired."
-echo "🔧 Shell configurations remain in .bashrc/.zshrc for PATH"
-echo "   You can manually remove them if desired."
+echo "   rm -rf $INSTALL_DIR"
 EOF
 
 chmod +x "$INSTALL_DIR/uninstall.sh"

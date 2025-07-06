@@ -257,10 +257,10 @@ def main():
         print("🎉 DEMO COMPLETE!")
         print("=" * 80)
         print("🚀 Next Steps:")
-        print("   • Start API: python -m src.api.app")
-        print("   • Run tests: make test")
-        print("   • See docs: http://localhost:8000/docs")
-        print("   • Explore: .local/ folder for research")
+        print("   • Market Analysis: python market_analysis_cli.py")
+        print("   • Market Watch: python market_watch.py")
+        print("   • Run tests: python run_tests.py")
+        print("   • Real-time data: python run_realtime.py")
         print("=" * 80)
         
     except Exception as e:

@@ -60,8 +60,4 @@ SUPPORTED_SYMBOLS = [
     'GLD', 'USO', 'SLV'
 ]
 
-# API Configuration
-API_HOST = "0.0.0.0"
-API_PORT = 8000
-API_TITLE = "Wagehood Trading Analysis API"
-API_VERSION = "1.0.0"
+# API Configuration removed - system uses Redis-based worker model
