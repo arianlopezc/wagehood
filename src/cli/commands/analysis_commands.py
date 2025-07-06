@@ -10,6 +10,8 @@ import asyncio
 import json
 import logging
 import os
+import sys
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
@@ -39,6 +41,28 @@ from ...backtest.engine import BacktestEngine, BacktestConfig
 from ...analysis.evaluator import PerformanceEvaluator
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def suppress_logging():
+    """Context manager to suppress all logging output for clean JSON output"""
+    # Store original handlers and levels
+    root_logger = logging.getLogger()
+    original_level = root_logger.level
+    original_handlers = root_logger.handlers[:]
+    
+    try:
+        # Temporarily remove all handlers and set level to CRITICAL
+        for handler in original_handlers:
+            root_logger.removeHandler(handler)
+        root_logger.setLevel(logging.CRITICAL)
+        
+        yield
+    finally:
+        # Restore original handlers and level
+        for handler in original_handlers:
+            root_logger.addHandler(handler)
+        root_logger.setLevel(original_level)
 
 
 @dataclass
@@ -468,8 +492,9 @@ class PeriodReturnFormatter:
     
     def _format_json(self, result) -> None:
         """Format period returns as JSON"""
-        metrics = result.performance_metrics
-        output = {
+        with suppress_logging():
+            metrics = result.performance_metrics
+            output = {
             "strategy": result.strategy_name,
             "symbol": result.symbol,
             "period": f"{result.start_date.date()} to {result.end_date.date()}",
@@ -1103,8 +1128,9 @@ def explain_strategy(ctx, strategy_name, output_format):
     if not strategy_name:
         # Show all strategies summary
         if output_format == 'json':
-            summaries = get_strategy_summary()
-            console.print(json.dumps(summaries, indent=2))
+            with suppress_logging():
+                summaries = get_strategy_summary()
+                console.print(json.dumps(summaries, indent=2))
         else:
             _show_all_strategies_summary(console)
         return
@@ -1118,7 +1144,8 @@ def explain_strategy(ctx, strategy_name, output_format):
         return
     
     if output_format == 'json':
-        console.print(json.dumps(explanation, indent=2))
+        with suppress_logging():
+            console.print(json.dumps(explanation, indent=2))
     else:
         _show_strategy_explanation(console, explanation)
 

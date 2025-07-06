@@ -294,8 +294,15 @@ class TradingStrategy(ABC):
         from ..indicators.momentum import calculate_macd
         
         if len(close_prices) >= 26:
-            macd_data = calculate_macd(close_prices, 12, 26, 9)
-            return {'macd': macd_data}
+            macd_line, signal_line, histogram = calculate_macd(close_prices, 12, 26, 9)
+            # Structure the data as expected by strategies
+            return {
+                'macd': {
+                    'macd': macd_line,
+                    'signal': signal_line,
+                    'histogram': histogram
+                }
+            }
         
         return {}
     
@@ -308,7 +315,13 @@ class TradingStrategy(ABC):
         
         for period in self._get_common_periods('bollinger'):
             if period <= data_len:
-                results[f'bollinger_{period}'] = calculate_bollinger_bands(close_prices, period, 2.0)
+                upper_band, middle_band, lower_band = calculate_bollinger_bands(close_prices, period, 2.0)
+                # Structure the data as expected by strategies
+                results[f'bollinger_{period}'] = {
+                    'upper': upper_band,
+                    'middle': middle_band,
+                    'lower': lower_band
+                }
         
         return results
     
@@ -316,8 +329,9 @@ class TradingStrategy(ABC):
         """Calculate Support and Resistance levels"""
         from ..indicators.levels import calculate_support_resistance
         
-        if len(arrays['high']) >= 20:
-            return calculate_support_resistance(arrays['high'], arrays['low'], arrays['close'])
+        if len(arrays['close']) >= 20:
+            # Use close prices for support/resistance calculation
+            return calculate_support_resistance(arrays['close'], lookback=20, min_touches=3)
         
         return {}
     

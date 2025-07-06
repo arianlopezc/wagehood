@@ -56,8 +56,10 @@ def calculate_rsi(data: Union[np.ndarray, list], period: int = RSI_PERIOD) -> np
         avg_loss = np.mean(losses[:period])
         
         # Calculate RSI for the first valid point
-        if avg_loss == 0:
-            result[period] = 100.0
+        if avg_loss == 0 and avg_gain == 0:
+            result[period] = 50.0  # Neutral for no price movement
+        elif avg_loss == 0:
+            result[period] = 100.0  # Only gains, no losses
         else:
             rs = avg_gain / avg_loss
             result[period] = 100.0 - (100.0 / (1 + rs))
@@ -71,8 +73,10 @@ def calculate_rsi(data: Union[np.ndarray, list], period: int = RSI_PERIOD) -> np
             avg_gain = (avg_gain * (period - 1) + gains[gain_idx]) / period
             avg_loss = (avg_loss * (period - 1) + losses[loss_idx]) / period
             
-            if avg_loss == 0:
-                result[i] = 100.0
+            if avg_loss == 0 and avg_gain == 0:
+                result[i] = 50.0  # Neutral for no price movement
+            elif avg_loss == 0:
+                result[i] = 100.0  # Only gains, no losses
             else:
                 rs = avg_gain / avg_loss
                 result[i] = 100.0 - (100.0 / (1 + rs))
