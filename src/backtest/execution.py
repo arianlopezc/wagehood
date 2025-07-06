@@ -272,6 +272,7 @@ class PortfolioManager:
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
         self.equity_curve: List[float] = [initial_capital]
+        self.equity_timestamps: List[datetime] = []
         self.trade_counter = 0
     
     def process_signal(self, signal: Signal, current_bar: OHLCV) -> Optional[Trade]:
@@ -421,6 +422,7 @@ class PortfolioManager:
                 total_equity += unrealized_pnl
         
         self.equity_curve.append(total_equity)
+        self.equity_timestamps.append(current_bar.timestamp)
     
     def get_portfolio_summary(self) -> Dict[str, Any]:
         """Get current portfolio summary"""

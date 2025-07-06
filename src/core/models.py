@@ -108,6 +108,19 @@ class Trade:
 
 
 @dataclass
+class PeriodReturn:
+    """Return for a specific period"""
+    period_start: datetime
+    period_end: datetime
+    period_type: str  # 'daily', 'weekly', 'monthly'
+    return_pct: float
+    pnl: float
+    starting_capital: float
+    ending_capital: float
+    trades_count: int
+
+
+@dataclass
 class PerformanceMetrics:
     """Performance metrics for strategy evaluation"""
     total_trades: int
@@ -128,6 +141,24 @@ class PerformanceMetrics:
     avg_trade_duration_hours: float
     max_consecutive_wins: int
     max_consecutive_losses: int
+    # Period-based returns
+    daily_returns: List['PeriodReturn'] = field(default_factory=list)
+    weekly_returns: List['PeriodReturn'] = field(default_factory=list)
+    monthly_returns: List['PeriodReturn'] = field(default_factory=list)
+    # Summary statistics for period returns
+    avg_daily_return: float = 0.0
+    avg_weekly_return: float = 0.0
+    avg_monthly_return: float = 0.0
+    best_day_return: float = 0.0
+    worst_day_return: float = 0.0
+    best_week_return: float = 0.0
+    worst_week_return: float = 0.0
+    best_month_return: float = 0.0
+    worst_month_return: float = 0.0
+    # Year-to-Date returns
+    ytd_return: float = 0.0
+    ytd_start_date: Optional[datetime] = None
+    ytd_start_capital: float = 0.0
 
 
 @dataclass
@@ -143,6 +174,7 @@ class BacktestResult:
     equity_curve: List[float]
     performance_metrics: PerformanceMetrics
     signals: List[Signal]
+    equity_timestamps: List[datetime] = field(default_factory=list)
 
 
 class TimeFrame(Enum):
