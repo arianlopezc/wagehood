@@ -3,6 +3,7 @@ Advanced caching system with local cache and optional Redis backend
 """
 
 import pickle
+import json
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Dict, List
@@ -266,44 +267,85 @@ class RedisCache(CacheBackend):
             raise
 
     def _serialize(self, value: Any) -> bytes:
-        """Serialize value for storage with optimized compression"""
+        """Serialize value with JSON as primary format, pickle as fallback"""
         try:
             import gzip
+            
+            # Try JSON first (more memory efficient and readable)
+            try:
+                json_data = json.dumps(value, default=str).encode('utf-8')
+                json_len = len(json_data)
+                
+                # Only compress JSON if it's large enough
+                if json_len > 2048:  # 2KB threshold
+                    compressed = gzip.compress(json_data, compresslevel=6)
+                    if len(compressed) < json_len * 0.9:
+                        return b"JSON_GZIP:" + compressed
+                
+                return b"JSON:" + json_data
+                
+            except (TypeError, ValueError):
+                # Fallback to pickle for complex objects that can't be JSON serialized
+                logger.debug(f"JSON serialization failed for {type(value)}, using pickle fallback")
+                data = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+                data_len = len(data)
 
-            # Use highest protocol for efficiency
-            data = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
-            data_len = len(data)
+                # Only compress if data is large enough to benefit
+                if data_len > 2048:  # 2KB threshold
+                    compressed = gzip.compress(data, compresslevel=6)
+                    # Use compression only if it provides >10% reduction
+                    if len(compressed) < data_len * 0.9:
+                        return b"PICKLE_GZIP:" + compressed
 
-            # Only compress if data is large enough to benefit
-            if data_len > 2048:  # 2KB threshold
-                compressed = gzip.compress(
-                    data, compresslevel=6
-                )  # Balanced compression
-                # Use compression only if it provides >10% reduction
-                if len(compressed) < data_len * 0.9:
-                    return b"GZIP:" + compressed
-
-            return b"RAW:" + data
+                return b"PICKLE:" + data
+                
         except Exception as e:
             logger.error(f"Failed to serialize value: {e}")
             raise
 
     def _deserialize(self, data: bytes) -> Any:
-        """Deserialize value from storage with compression support"""
+        """Deserialize value from storage with support for JSON and pickle formats"""
         try:
             import gzip
 
-            if data.startswith(b"GZIP:"):
-                # Decompress data
+            if data.startswith(b"JSON_GZIP:"):
+                # Decompress JSON data
+                compressed_data = data[10:]  # Remove "JSON_GZIP:" prefix
+                decompressed = gzip.decompress(compressed_data)
+                return json.loads(decompressed.decode('utf-8'))
+            elif data.startswith(b"JSON:"):
+                # Raw JSON data
+                json_data = data[5:]  # Remove "JSON:" prefix
+                return json.loads(json_data.decode('utf-8'))
+            elif data.startswith(b"PICKLE_GZIP:"):
+                # Decompress pickle data
+                compressed_data = data[12:]  # Remove "PICKLE_GZIP:" prefix
+                decompressed = gzip.decompress(compressed_data)
+                return pickle.loads(decompressed)
+            elif data.startswith(b"PICKLE:"):
+                # Raw pickle data
+                pickle_data = data[7:]  # Remove "PICKLE:" prefix
+                return pickle.loads(pickle_data)
+            elif data.startswith(b"GZIP:"):
+                # Legacy compressed pickle format
                 compressed_data = data[5:]  # Remove "GZIP:" prefix
                 decompressed = gzip.decompress(compressed_data)
                 return pickle.loads(decompressed)
             elif data.startswith(b"RAW:"):
-                # Raw data
+                # Legacy raw pickle format
                 raw_data = data[4:]  # Remove "RAW:" prefix
                 return pickle.loads(raw_data)
             else:
-                # Legacy format (no prefix)
+                # Try to detect if it's raw JSON first
+                try:
+                    # Attempt to decode as UTF-8 and parse as JSON
+                    text_data = data.decode('utf-8')
+                    if text_data.strip().startswith(('{', '[', '"')) or text_data.strip() in ('true', 'false', 'null'):
+                        return json.loads(text_data)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    pass
+                
+                # Legacy format (no prefix) - assume pickle
                 return pickle.loads(data)
         except Exception as e:
             logger.error(f"Failed to deserialize data: {e}")
