@@ -17,7 +17,7 @@ try:
     from alpaca.data.live import StockDataStream, CryptoDataStream
     from alpaca.data.requests import (
         StockBarsRequest, StockQuotesRequest, StockTradesRequest,
-        CryptoBarsRequest, CryptoQuotesRequest, CryptoTradesRequest
+        CryptoBarsRequest, CryptoQuoteRequest, CryptoTradesRequest
     )
     from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
     from alpaca.common.exceptions import APIError
@@ -188,7 +188,7 @@ class AlpacaProvider(DataProvider):
             )
             
             bars = self.crypto_client.get_crypto_bars(request)
-            if not bars.df.empty:
+            if hasattr(bars, 'df') and not bars.df.empty:
                 logger.debug("Connection test successful")
             else:
                 logger.warning("Connection test returned empty data")
@@ -236,7 +236,6 @@ class AlpacaProvider(DataProvider):
         """
         return OHLCV(
             timestamp=bar.timestamp,
-            symbol=symbol,
             open=float(bar.open),
             high=float(bar.high),
             low=float(bar.low),
@@ -315,7 +314,6 @@ class AlpacaProvider(DataProvider):
                     
                     ohlcv = OHLCV(
                         timestamp=timestamp,
-                        symbol=symbol,
                         open=float(row['open']),
                         high=float(row['high']),
                         low=float(row['low']),

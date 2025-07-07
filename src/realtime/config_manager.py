@@ -470,7 +470,7 @@ class ConfigManager:
                     AssetConfig(
                         symbol=symbol.strip(),
                         enabled=True,
-                        data_provider=os.environ.get('DATA_PROVIDER', 'mock'),
+                        data_provider=os.environ.get('DATA_PROVIDER', 'alpaca'),
                         timeframes=['1m', '5m', '1h', '1d'],
                         priority=1,
                         enabled_strategies=['macd_rsi_strategy', 'ma_crossover_strategy', 'rsi_trend_strategy'],
@@ -612,7 +612,7 @@ class ConfigManager:
             new_asset = AssetConfig(
                 symbol=symbol,
                 enabled=True,
-                data_provider=data_provider or os.environ.get('DATA_PROVIDER', 'mock'),
+                data_provider=data_provider or os.environ.get('DATA_PROVIDER', 'alpaca'),
                 timeframes=timeframes or ['1m', '5m', '1h', '1d'],
                 priority=priority,
                 enabled_strategies=enabled_strategies or ['macd_rsi_strategy', 'rsi_trend_strategy'],
@@ -1417,7 +1417,7 @@ class ConfigManager:
                 AssetConfig(
                     symbol=symbol.strip(),
                     enabled=True,
-                    data_provider=os.environ.get('DATA_PROVIDER', 'mock'),
+                    data_provider=os.environ.get('DATA_PROVIDER', 'alpaca'),
                     timeframes=['1m', '5m', '1h', '1d'],
                     priority=1,
                     enabled_strategies=['macd_rsi_strategy', 'ma_crossover_strategy', 'rsi_trend_strategy'],

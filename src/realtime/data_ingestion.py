@@ -24,7 +24,6 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from src.storage.cache import cache_manager
-from src.data.providers.mock_provider import MockProvider
 from src.core.models import OHLCV
 from src.realtime.config_manager import ConfigManager, AssetConfig
 
@@ -42,33 +41,51 @@ class MinimalAlpacaProvider:
     """Minimal Alpaca provider implementation for data ingestion."""
     
     def __init__(self, config):
-        """Initialize minimal Alpaca provider."""
+        """Initialize minimal Alpaca provider - PRODUCTION MODE."""
         self.name = "Alpaca"
         self.config = config
         self._connected = False
         self.last_error = None
         
+        # Validate required credentials
+        if not config.get('api_key') or not config.get('secret_key'):
+            raise ValueError(
+                "Alpaca API credentials are MANDATORY for production operation. "
+                "Provide api_key and secret_key in config."
+            )
+        
         # Initialize clients
         self.stock_client = None
         
+        logger.info(
+            f"Initializing Alpaca provider (paper={config.get('paper', True)}, "
+            f"feed={config.get('feed', 'iex')})"
+        )
+        
     async def connect(self):
-        """Connect to Alpaca."""
+        """Connect to Alpaca - REQUIRED for production."""
         try:
             from alpaca.data.historical import StockHistoricalDataClient
             
+            logger.info("Connecting to Alpaca Markets...")
             self.stock_client = StockHistoricalDataClient(
                 api_key=self.config['api_key'],
                 secret_key=self.config['secret_key']
             )
             
-            # Test connection
+            # Test connection - MANDATORY validation
             await self._test_connection()
             self._connected = True
+            logger.info("✅ Successfully connected to Alpaca Markets")
             return True
             
         except Exception as e:
             self.last_error = str(e)
-            return False
+            logger.error(f"❌ CRITICAL: Failed to connect to Alpaca Markets: {e}")
+            raise RuntimeError(
+                f"Cannot establish connection to Alpaca Markets. "
+                f"Check credentials and network connectivity: {e}"
+            )
     
     async def disconnect(self):
         """Disconnect from Alpaca."""
@@ -266,26 +283,33 @@ class MarketDataIngestionService:
             )
         }
         
-        # Data providers
-        self._providers = {
-            "mock": MockProvider()
-        }
+        # Data providers - PRODUCTION MODE: Alpaca only
+        self._providers = {}
         
-        # Initialize Alpaca provider if available
-        if ALPACA_PROVIDER_AVAILABLE:
-            try:
-                # Create Alpaca provider using a direct method to avoid import issues
-                alpaca_provider = self._create_alpaca_provider()
-                if alpaca_provider:
-                    self._providers["alpaca"] = alpaca_provider
-                    logger.info("Alpaca provider initialized successfully")
-                else:
-                    logger.warning("Alpaca credentials not found, provider not initialized")
-                    
-            except Exception as e:
-                logger.error(f"Failed to initialize Alpaca provider: {e}")
-        else:
-            logger.warning("Alpaca provider not available")
+        # Initialize Alpaca provider - REQUIRED for production
+        if not ALPACA_PROVIDER_AVAILABLE:
+            raise ImportError(
+                "alpaca-py is required for production operation. "
+                "Install with: pip install alpaca-py"
+            )
+        
+        try:
+            # Create Alpaca provider - MANDATORY for production
+            alpaca_provider = self._create_alpaca_provider()
+            if alpaca_provider:
+                self._providers["alpaca"] = alpaca_provider
+                logger.info("Alpaca provider initialized successfully")
+            else:
+                raise ValueError(
+                    "Alpaca credentials are REQUIRED for production operation. "
+                    "Set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables."
+                )
+                
+        except Exception as e:
+            logger.error(f"CRITICAL: Failed to initialize Alpaca provider: {e}")
+            raise RuntimeError(
+                f"Cannot start production service without valid Alpaca credentials: {e}"
+            )
         
         # Performance tracking
         self._stats = {
@@ -300,16 +324,19 @@ class MarketDataIngestionService:
         self._initialize_streams()
     
     def _create_alpaca_provider(self):
-        """Create Alpaca provider to avoid import issues."""
+        """Create Alpaca provider - REQUIRED for production."""
         try:
             import os
             
-            # Get configuration
+            # Get configuration - MANDATORY
             api_key = os.getenv('ALPACA_API_KEY')
             secret_key = os.getenv('ALPACA_SECRET_KEY')
             
             if not api_key or not secret_key:
-                return None
+                raise ValueError(
+                    "ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables are REQUIRED. "
+                    "Cannot operate in production without valid Alpaca credentials."
+                )
             
             config = {
                 'api_key': api_key,
@@ -320,13 +347,14 @@ class MarketDataIngestionService:
                 'retry_delay': float(os.getenv('ALPACA_RETRY_DELAY', '1.0'))
             }
             
-            # Create a minimal Alpaca provider directly here
+            # Create and validate Alpaca provider
             provider = MinimalAlpacaProvider(config)
+            logger.info(f"Created Alpaca provider with feed: {config['feed']}, paper: {config['paper']}")
             return provider
             
         except Exception as e:
-            logger.error(f"Error creating Alpaca provider: {e}")
-            return None
+            logger.error(f"CRITICAL: Cannot create Alpaca provider: {e}")
+            raise
     
     def _initialize_redis(self):
         """Initialize Redis connection for streams."""
@@ -399,17 +427,22 @@ class MarketDataIngestionService:
         logger.info("Starting market data ingestion service")
         
         try:
-            # Connect all providers
+            # Connect all providers - MANDATORY for production
+            connected_providers = 0
             for provider_name, provider in self._providers.items():
                 try:
                     if hasattr(provider, 'connect'):
-                        connected = await provider.connect()
-                        if connected:
-                            logger.info(f"Connected to {provider_name} provider")
-                        else:
-                            logger.warning(f"Failed to connect to {provider_name} provider")
+                        await provider.connect()  # This will raise exception if fails
+                        connected_providers += 1
+                        logger.info(f"✅ Connected to {provider_name} provider")
+                    else:
+                        raise RuntimeError(f"Provider {provider_name} does not support connection")
                 except Exception as e:
-                    logger.error(f"Error connecting to {provider_name} provider: {e}")
+                    logger.error(f"❌ CRITICAL: Failed to connect to {provider_name} provider: {e}")
+                    raise RuntimeError(f"Cannot start service without {provider_name} connectivity: {e}")
+            
+            if connected_providers == 0:
+                raise RuntimeError("No data providers connected - cannot start production service")
             
             # Get system configuration
             system_config = self.config_manager.get_system_config()
