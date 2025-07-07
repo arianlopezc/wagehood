@@ -642,6 +642,9 @@ class MarketDataIngestionService:
             
             logger.debug(f"Published market data event for {symbol}: {message_id}")
             
+            # Store latest symbol values in Redis
+            await self._store_symbol_values(symbol, data, source)
+            
             # Also cache latest data for quick access
             cache_key = f"latest_price_{symbol}"
             cache_manager.set("market_data", cache_key, asdict(event), ttl=60)
@@ -649,6 +652,245 @@ class MarketDataIngestionService:
         except Exception as e:
             logger.error(f"Failed to publish market data event for {symbol}: {e}")
             raise
+    
+    async def _store_symbol_values(self, symbol: str, data: OHLCV, source: str):
+        """
+        Store latest symbol values in Redis for quick access.
+        
+        Args:
+            symbol: Trading symbol
+            data: OHLCV data
+            source: Data source name
+        """
+        try:
+            # Check if symbol storage is enabled
+            if not self._is_symbol_storage_enabled():
+                return
+            
+            current_time = datetime.now()
+            
+            # Store latest values as JSON (more memory efficient than hash)
+            latest_key = f"symbol:latest:{symbol}"
+            latest_data = {
+                "timestamp": data.timestamp.isoformat(),
+                "open": data.open,
+                "high": data.high, 
+                "low": data.low,
+                "close": data.close,
+                "volume": data.volume,
+                "source": source,
+                "updated_at": current_time.isoformat()
+            }
+            
+            # Store as single JSON value (reduces memory overhead vs hash fields)
+            self._redis_client.set(latest_key, json.dumps(latest_data))
+            
+            # Store in price history (sorted set)
+            history_key = f"symbol:history:{symbol}"
+            history_value = json.dumps({
+                "price": data.close,
+                "volume": data.volume,
+                "source": source
+            })
+            timestamp_score = int(data.timestamp.timestamp())
+            
+            # Add to sorted set
+            self._redis_client.zadd(history_key, {history_value: timestamp_score})
+            
+            # Trim history to max size
+            max_history_size = self._get_symbol_history_max_size()
+            if max_history_size > 0:
+                self._redis_client.zremrangebyrank(history_key, 0, -(max_history_size + 1))
+            
+            # Set TTL for history
+            history_ttl = self._get_symbol_history_ttl()
+            if history_ttl > 0:
+                self._redis_client.expire(history_key, history_ttl)
+            
+            # Update symbol metadata
+            await self._update_symbol_metadata(symbol, current_time)
+            
+            logger.debug(f"Stored symbol values for {symbol} in Redis")
+            
+        except Exception as e:
+            logger.error(f"Failed to store symbol values for {symbol}: {e}")
+            # Don't raise - symbol storage is optional
+    
+    async def _update_symbol_metadata(self, symbol: str, current_time: datetime):
+        """Update symbol metadata in Redis."""
+        try:
+            meta_key = f"symbol:meta:{symbol}"
+            
+            # Check if this is first time seeing this symbol
+            existing_meta = self._redis_client.get(meta_key)
+            if not existing_meta:
+                # First time - set initial metadata as JSON
+                meta_data = {
+                    "first_seen": current_time.isoformat(),
+                    "last_updated": current_time.isoformat(),
+                    "total_updates": 1,
+                    "active": True
+                }
+                self._redis_client.set(meta_key, json.dumps(meta_data))
+            else:
+                # Update existing metadata - load, modify, store
+                try:
+                    meta_data = json.loads(existing_meta.decode('utf-8') if isinstance(existing_meta, bytes) else existing_meta)
+                    meta_data["last_updated"] = current_time.isoformat()
+                    meta_data["active"] = True
+                    meta_data["total_updates"] = meta_data.get("total_updates", 0) + 1
+                    self._redis_client.set(meta_key, json.dumps(meta_data))
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"Failed to parse existing metadata for {symbol}, recreating: {e}")
+                    # Recreate metadata if corrupted
+                    meta_data = {
+                        "first_seen": current_time.isoformat(),
+                        "last_updated": current_time.isoformat(),
+                        "total_updates": 1,
+                        "active": True
+                    }
+                    self._redis_client.set(meta_key, json.dumps(meta_data))
+                
+        except Exception as e:
+            logger.error(f"Failed to update symbol metadata for {symbol}: {e}")
+    
+    def _is_symbol_storage_enabled(self) -> bool:
+        """Check if symbol storage is enabled in configuration."""
+        import os
+        return os.getenv("REDIS_STORE_SYMBOL_VALUES", "true").lower() == "true"
+    
+    def _get_symbol_history_max_size(self) -> int:
+        """Get maximum size for symbol history storage."""
+        import os
+        try:
+            return int(os.getenv("REDIS_SYMBOL_HISTORY_MAX_SIZE", "1000"))
+        except (ValueError, TypeError):
+            return 1000
+    
+    def _get_symbol_history_ttl(self) -> int:
+        """Get TTL for symbol history storage in seconds."""
+        import os
+        try:
+            return int(os.getenv("REDIS_SYMBOL_HISTORY_TTL", "86400"))  # 24 hours
+        except (ValueError, TypeError):
+            return 86400
+    
+    def get_latest_symbol_value(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest stored value for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Dictionary with latest symbol data or None if not found
+        """
+        try:
+            latest_key = f"symbol:latest:{symbol}"
+            data = self._redis_client.get(latest_key)
+            
+            if not data:
+                return None
+            
+            # Parse JSON data
+            if isinstance(data, bytes):
+                data = data.decode('utf-8')
+            
+            return json.loads(data)
+            
+        except Exception as e:
+            logger.error(f"Failed to get latest symbol value for {symbol}: {e}")
+            return None
+    
+    def get_symbol_history(self, symbol: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get price history for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            limit: Maximum number of historical entries to return
+            
+        Returns:
+            List of historical price data
+        """
+        try:
+            history_key = f"symbol:history:{symbol}"
+            
+            # Get latest entries (highest scores first)
+            raw_data = self._redis_client.zrevrange(history_key, 0, limit - 1, withscores=True)
+            
+            history = []
+            for value, timestamp in raw_data:
+                if isinstance(value, bytes):
+                    value = value.decode('utf-8')
+                
+                try:
+                    data = json.loads(value)
+                    data['timestamp'] = datetime.fromtimestamp(timestamp).isoformat()
+                    history.append(data)
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Failed to parse history entry for {symbol}: {e}")
+                    continue
+            
+            return history
+            
+        except Exception as e:
+            logger.error(f"Failed to get symbol history for {symbol}: {e}")
+            return []
+    
+    def get_symbol_metadata(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Dictionary with symbol metadata or None if not found
+        """
+        try:
+            meta_key = f"symbol:meta:{symbol}"
+            data = self._redis_client.get(meta_key)
+            
+            if not data:
+                return None
+            
+            # Parse JSON data
+            if isinstance(data, bytes):
+                data = data.decode('utf-8')
+            
+            return json.loads(data)
+            
+        except Exception as e:
+            logger.error(f"Failed to get symbol metadata for {symbol}: {e}")
+            return None
+    
+    def get_all_stored_symbols(self) -> List[str]:
+        """
+        Get list of all symbols that have stored data.
+        
+        Returns:
+            List of symbol names
+        """
+        try:
+            # Look for all latest symbol keys
+            pattern = "symbol:latest:*"
+            keys = self._redis_client.keys(pattern)
+            
+            # Extract symbol names from keys
+            symbols = []
+            for key in keys:
+                if isinstance(key, bytes):
+                    key = key.decode('utf-8')
+                # Extract symbol from key pattern "symbol:latest:SYMBOL"
+                symbol = key.split(':')[-1]
+                symbols.append(symbol)
+            
+            return sorted(symbols)
+            
+        except Exception as e:
+            logger.error(f"Failed to get stored symbols list: {e}")
+            return []
     
     async def _monitor_performance(self):
         """Monitor service performance and log statistics."""
