@@ -11,6 +11,16 @@ This file contains project-specific instructions and standards for Claude Code t
 - Create the `.local/` folder if it doesn't exist
 - Use descriptive filenames for plan documents (e.g., `.local/feature-design.md`, `.local/refactoring-plan.md`)
 
+## Documentation Guidelines
+- **Private Documentation**: Development notes, analysis, and internal design documents go in `.local/` folder (gitignored)
+- **Public Documentation**: User-facing documentation, API guides, and publicly linked docs go in `docs/` folder (version controlled)
+- **Rule**: Any documentation referenced in public links (Discord channels, README, etc.) MUST be in `docs/` folder
+- **Examples**: 
+  - Discord integration guides → `docs/discord-integration-complete.md`
+  - Configuration guides → `docs/CONFIGURATION_GUIDE.md`
+  - API documentation → `docs/api-reference.md`
+- **Migration**: When documentation graduates from private to public, move from `.local/` to `docs/` and update all links
+
 ## All Project Commands
 
 ### Testing Commands
