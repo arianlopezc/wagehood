@@ -19,6 +19,7 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
+from .constants import COMPANY_NAMES
 from .discord_notifier import DiscordNotifier
 from .message_formatter import MessageFormatter
 from .config import NotificationConfig, NotificationRateLimiter
@@ -327,18 +328,8 @@ class NotificationService:
                 }
                 
                 # Add company name if available
-                company_names = {
-                    'AAPL': 'Apple Inc.',
-                    'MSFT': 'Microsoft Corp.',
-                    'GOOGL': 'Alphabet Inc.',
-                    'TSLA': 'Tesla Inc.',
-                    'SPY': 'SPDR S&P 500 ETF',
-                    'QQQ': 'Invesco QQQ ETF',
-                    'IWM': 'iShares Russell 2000 ETF'
-                }
-                
-                if symbol in company_names:
-                    notification_data['company_name'] = company_names[symbol]
+                if symbol in COMPANY_NAMES:
+                    notification_data['company_name'] = COMPANY_NAMES[symbol]
                 
                 return notification_data
                 
@@ -359,18 +350,8 @@ class NotificationService:
                 }
                 
                 # Add company name if available
-                company_names = {
-                    'AAPL': 'Apple Inc.',
-                    'MSFT': 'Microsoft Corp.',
-                    'GOOGL': 'Alphabet Inc.',
-                    'TSLA': 'Tesla Inc.',
-                    'SPY': 'SPDR S&P 500 ETF',
-                    'QQQ': 'Invesco QQQ ETF',
-                    'IWM': 'iShares Russell 2000 ETF'
-                }
-                
-                if symbol in company_names:
-                    notification_data['company_name'] = company_names[symbol]
+                if symbol in COMPANY_NAMES:
+                    notification_data['company_name'] = COMPANY_NAMES[symbol]
                 
                 return notification_data
             
@@ -393,18 +374,8 @@ class NotificationService:
                 }
                 
                 # Add company name if available
-                company_names = {
-                    'AAPL': 'Apple Inc.',
-                    'MSFT': 'Microsoft Corp.',
-                    'GOOGL': 'Alphabet Inc.',
-                    'TSLA': 'Tesla Inc.',
-                    'SPY': 'SPDR S&P 500 ETF',
-                    'QQQ': 'Invesco QQQ ETF',
-                    'IWM': 'iShares Russell 2000 ETF'
-                }
-                
-                if symbol in company_names:
-                    notification_data['company_name'] = company_names[symbol]
+                if symbol in COMPANY_NAMES:
+                    notification_data['company_name'] = COMPANY_NAMES[symbol]
                 
                 return notification_data
             

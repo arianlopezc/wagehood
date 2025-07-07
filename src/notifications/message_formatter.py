@@ -9,6 +9,8 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
+from .constants import COMPANY_NAMES, SIGNAL_COLORS
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,14 +19,12 @@ class MessageFormatter:
     Formats trading data into Discord-friendly embed messages.
     """
     
-    # Discord color constants
+    # Discord color constants - use centralized colors for signals
     COLORS = {
-        'BUY': 65280,      # Green
-        'SELL': 16711680,  # Red  
-        'HOLD': 3447003,   # Blue
+        **SIGNAL_COLORS,  # Import signal colors from constants
         'WARNING': 16753920,  # Orange
-        'SUCCESS': 65280,  # Green
-        'INFO': 3447003    # Blue
+        'SUCCESS': 3066993,   # Green
+        'INFO': 3447003       # Blue
     }
     
     # Signal emojis

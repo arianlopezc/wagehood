@@ -7,8 +7,11 @@ rate limits, and configuration settings.
 
 import os
 import logging
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
+
+from .constants import STRATEGY_CONFIGS, STRATEGY_NAME_MAPPINGS, StrategyType
 
 logger = logging.getLogger(__name__)
 
@@ -68,63 +71,7 @@ class MultiChannelNotificationConfig:
             fallback_webhook = os.getenv('DISCORD_WEBHOOK_SWING_SIGNALS', '')
             
             # Strategy channel configurations
-            strategy_channels = {}
-            
-            # Define strategy configurations with colors and emojis
-            strategy_configs = {
-                'macd_rsi': {
-                    'name': 'MACD+RSI Combined',
-                    'color': 3447003,  # Blue
-                    'emoji': '📊',
-                    'default_rate_limit': 8
-                },
-                'rsi_trend': {
-                    'name': 'RSI Trend Following', 
-                    'color': 16776960,  # Yellow
-                    'emoji': '📉',
-                    'default_rate_limit': 6
-                },
-                'bollinger_breakout': {
-                    'name': 'Bollinger Band Breakout',
-                    'color': 16753920,  # Orange
-                    'emoji': '💥',
-                    'default_rate_limit': 10
-                },
-                'sr_breakout': {
-                    'name': 'Support/Resistance Breakout',
-                    'color': 16711680,  # Red
-                    'emoji': '🎯',
-                    'default_rate_limit': 3
-                }
-            }
-            
-            # Load strategy-specific configurations
-            for strategy_key, strategy_info in strategy_configs.items():
-                # Get webhook URL
-                webhook_key = f'DISCORD_WEBHOOK_{strategy_key.upper()}'
-                webhook_url = os.getenv(webhook_key, '')
-                
-                # Get enabled status
-                enabled_key = f'DISCORD_ENABLED_{strategy_key.upper()}'
-                strategy_enabled = os.getenv(enabled_key, 'true').lower() == 'true'
-                
-                # Get rate limit
-                rate_limit_key = f'DISCORD_RATE_LIMIT_{strategy_key.upper()}'
-                rate_limit = int(os.getenv(rate_limit_key, str(strategy_info['default_rate_limit'])))
-                
-                # Create strategy channel config
-                if webhook_url and strategy_enabled:
-                    strategy_channels[strategy_key] = StrategyChannelConfig(
-                        strategy_name=strategy_info['name'],
-                        webhook_url=webhook_url,
-                        enabled=strategy_enabled,
-                        max_notifications_per_hour=rate_limit,
-                        channel_color=strategy_info['color'],
-                        emoji=strategy_info['emoji']
-                    )
-                    logger.info(f"Configured Discord channel for {strategy_info['name']}")
-                else:
-                    logger.warning(f"Strategy {strategy_key} not configured - missing webhook or disabled")
+            strategy_channels = cls._build_strategy_configs()
             
             config = cls(
                 enabled=enabled,
@@ -143,6 +90,40 @@ class MultiChannelNotificationConfig:
             # Return disabled configuration on error
             return cls(enabled=False, multi_channel_enabled=False)
     
+    @classmethod
+    def _build_strategy_configs(cls) -> Dict[str, StrategyChannelConfig]:
+        """Build strategy configurations from environment variables and constants."""
+        strategy_channels = {}
+        
+        for strategy_key, strategy_info in STRATEGY_CONFIGS.items():
+            # Get webhook URL
+            webhook_key = f'DISCORD_WEBHOOK_{strategy_key.upper()}'
+            webhook_url = os.getenv(webhook_key, '')
+            
+            # Get enabled status
+            enabled_key = f'DISCORD_ENABLED_{strategy_key.upper()}'
+            strategy_enabled = os.getenv(enabled_key, 'true').lower() == 'true'
+            
+            # Get rate limit
+            rate_limit_key = f'DISCORD_RATE_LIMIT_{strategy_key.upper()}'
+            rate_limit = int(os.getenv(rate_limit_key, str(strategy_info['default_rate_limit'])))
+            
+            # Create strategy channel config
+            if webhook_url and strategy_enabled:
+                strategy_channels[strategy_key] = StrategyChannelConfig(
+                    strategy_name=strategy_info['name'],
+                    webhook_url=webhook_url,
+                    enabled=strategy_enabled,
+                    max_notifications_per_hour=rate_limit,
+                    channel_color=strategy_info['color'],
+                    emoji=strategy_info['emoji']
+                )
+                logger.info(f"Configured Discord channel for {strategy_info['name']}")
+            else:
+                logger.warning(f"Strategy {strategy_key} not configured - missing webhook or disabled")
+        
+        return strategy_channels
+
     def get_strategy_config(self, strategy_name: str) -> Optional[StrategyChannelConfig]:
         """
         Get configuration for a specific strategy.
@@ -157,9 +138,10 @@ class MultiChannelNotificationConfig:
         normalized_name = self._normalize_strategy_name(strategy_name)
         return self.strategy_channels.get(normalized_name)
     
+    @lru_cache(maxsize=32)
     def _normalize_strategy_name(self, strategy_name: str) -> str:
         """
-        Normalize strategy name for consistent lookup.
+        Normalize strategy name for consistent lookup with caching.
         
         Args:
             strategy_name: Raw strategy name
@@ -167,26 +149,8 @@ class MultiChannelNotificationConfig:
         Returns:
             Normalized strategy name
         """
-        # Handle various strategy name formats
-        name_mappings = {
-            'macd+rsi': 'macd_rsi',
-            'macd_rsi': 'macd_rsi',
-            'macd+rsi combined': 'macd_rsi',
-            'macd rsi': 'macd_rsi',
-            'rsi_trend': 'rsi_trend',
-            'rsi trend': 'rsi_trend',
-            'rsi trend following': 'rsi_trend',
-            'bollinger_breakout': 'bollinger_breakout',
-            'bollinger breakout': 'bollinger_breakout',
-            'bollinger band breakout': 'bollinger_breakout',
-            'sr_breakout': 'sr_breakout',
-            'support/resistance breakout': 'sr_breakout',
-            'support resistance breakout': 'sr_breakout',
-            's/r breakout': 'sr_breakout'
-        }
-        
         normalized = strategy_name.lower().strip()
-        return name_mappings.get(normalized, normalized)
+        return STRATEGY_NAME_MAPPINGS.get(normalized, normalized)
     
     def has_strategy_channel(self, strategy_name: str) -> bool:
         """
