@@ -1,34 +1,40 @@
 # Wagehood Configuration Guide
 
-Guide for configuring the multi-strategy multi-timeframe trading system.
+Guide for configuring the multi-strategy multi-timeframe trading system with Python API.
 
 ## Table of Contents
 
 1. [Quick Setup](#quick-setup)
 2. [Environment Configuration](#environment-configuration)
-3. [Trading Profile Configuration](#trading-profile-configuration)
-4. [Strategy Parameters](#strategy-parameters)
-5. [Redis Configuration](#redis-configuration)
-6. [Performance Tuning](#performance-tuning)
-7. [Monitoring Configuration](#monitoring-configuration)
-8. [Alpaca Integration](#alpaca-integration)
+3. [Strategy Parameters](#strategy-parameters)
+4. [Redis Configuration](#redis-configuration)
+5. [Performance Tuning](#performance-tuning)
+6. [Alpaca Integration](#alpaca-integration)
+7. [Python API Configuration](#python-api-configuration)
 
 ## Quick Setup
 
 ### Minimal Configuration
 
-For a basic setup, you only need:
+For a basic Python API setup:
 
-```bash
-# 1. Start Redis
-redis-server
+```python
+# 1. Start Redis (if using real-time features)
+# redis-server
 
-# 2. Set basic environment variables
-export WATCHLIST_SYMBOLS="SPY,QQQ,AAPL"
-export DATA_PROVIDER="mock"
+# 2. Basic Python API usage
+from src.strategies import create_strategy
+from src.data.providers.mock_provider import MockProvider
+from src.backtest.engine import BacktestEngine
 
-# 3. Start the system
-python run_realtime.py
+# Create strategy and test with mock data
+strategy = create_strategy('macd_rsi')
+provider = MockProvider()
+data = provider.generate_realistic_data('SPY', periods=252)
+
+engine = BacktestEngine()
+result = engine.run_backtest(strategy, data, initial_capital=10000)
+print(f"Total Return: {result.performance_metrics.total_return_pct:.2%}")
 ```
 
 ### Production Setup
@@ -37,10 +43,9 @@ python run_realtime.py
 # Environment variables for production
 export REDIS_HOST="localhost"
 export REDIS_PORT=6379
-export WATCHLIST_SYMBOLS="SPY,QQQ,IWM,AAPL,MSFT,GOOGL,TSLA,NVDA"
-export DATA_PROVIDER="alpaca"
+export ALPACA_API_KEY="your_api_key"
+export ALPACA_SECRET_KEY="your_secret_key"
 export ALPACA_PAPER_TRADING="true"
-export CALCULATION_WORKERS=4
 export LOG_LEVEL="INFO"
 ```
 

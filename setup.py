@@ -12,7 +12,7 @@ setup(
     name="wagehood",
     version="0.1.0",
     author="Wagehood Team",
-    description="Professional trend-following trading analysis system with Redis-based worker service and CLI tools",
+    description="Trend-following trading analysis system with Redis-based worker service and Python API",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(include=['src', 'src.*']),
@@ -35,11 +35,5 @@ setup(
     package_data={
         "": ["*.md", "*.txt", "*.yml", "*.yaml"],
     },
-    entry_points={
-        "console_scripts": [
-            "wagehood-cli=market_analysis_cli:cli",
-            "wagehood-watch=market_watch:main",
-            "wagehood-realtime=run_realtime:main",
-        ],
-    },
+    # Entry points removed - system uses Python API, not CLI commands
 )

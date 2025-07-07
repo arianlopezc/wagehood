@@ -1,6 +1,6 @@
 # Wagehood Trading Analysis System
 
-**A Redis-based worker service for real-time market analysis with CLI tools for strategy analysis, market monitoring, and backtesting. Built with data processing and trading strategy evaluation capabilities.**
+**A Redis-based worker service for real-time market analysis with Python API for strategy analysis, market monitoring, and backtesting. Built with data processing and trading strategy evaluation capabilities.**
 
 ## 🚀 Overview
 
@@ -10,7 +10,7 @@ Wagehood is a trading system for systematic traders and quantitative researchers
 
 - **5 Trading Strategies** with documented win rates up to 73%
 - **Redis-Based Worker Service** with real-time market data processing
-- **CLI Tools** - Market analysis and monitoring interfaces
+- **Python API** - Market analysis and monitoring interfaces
 - **Strategy Analysis & Optimization** - Analyze which strategies work best for your trading style
 - **Strategy Documentation** - Detailed explanations of signal logic and parameters
 - **Real-Time Processing** with Redis Streams for event-driven architecture
@@ -108,10 +108,8 @@ src/
 ├── analysis/          # Performance evaluation and comparison
 └── storage/           # Results storage and caching
 
-CLI Tools:
-├── market_analysis_cli.py  # Market analysis interface
-├── market_watch.py        # Real-time market monitoring
-└── run_realtime.py       # Worker service startup script
+Python API:
+└── src/                   # Main API package structure
 ```
 
 ## 📊 Technical Indicators
@@ -143,7 +141,7 @@ CLI Tools:
 
 ## 🚀 Quick Start
 
-> **💡 Worker Service Architecture**: The system runs as a Redis-based worker service with dedicated CLI tools for market analysis and monitoring.
+> **💡 Worker Service Architecture**: The system runs as a Redis-based worker service with Python API for market analysis and monitoring.
 
 ### Prerequisites
 
@@ -204,30 +202,40 @@ python run_tests.py --unit
 redis-cli ping
 
 # Test market data generation
-python -c "from src.data.providers.mock_provider import MockProvider; print('Mock provider working')"
+python -c "from src.data.mock_generator import MockDataGenerator; print('Mock provider working')"
 
-# Test CLI tools
-python market_analysis_cli.py --help
-python market_watch.py --help
+# Test Python API
+python -c "from src.core.models import OHLCV; print('Core models working')"
+python -c "from src.strategies import create_strategy; print('Strategies working')"
 ```
 
 ### Basic Usage
 
 ```python
-from src.data import DataStore, MockDataGenerator
-from src.strategies import MACDRSIStrategy
-from src.backtest import BacktestEngine
+from src.data.mock_generator import MockDataGenerator
+from src.strategies import create_strategy
+from src.backtest.engine import BacktestEngine
+from src.core.models import MarketData, TimeFrame
 
 # Generate sample data
 generator = MockDataGenerator()
-data = generator.generate_realistic_data("SPY", periods=252)
+ohlcv_data = generator.generate_realistic_data("SPY", periods=252)
+
+# Create MarketData object for backtesting
+market_data = MarketData(
+    symbol="SPY",
+    timeframe=TimeFrame.DAILY,
+    data=ohlcv_data,
+    indicators={},
+    last_updated=ohlcv_data[-1].timestamp
+)
 
 # Initialize strategy
-strategy = MACDRSIStrategy()
+strategy = create_strategy('macd_rsi')
 
 # Run backtest
 engine = BacktestEngine()
-result = engine.run_backtest(strategy, data, initial_capital=10000)
+result = engine.run_backtest(strategy, market_data, initial_capital=10000)
 
 print(f"Total Return: {result.performance_metrics.total_return_pct:.2%}")
 print(f"Win Rate: {result.performance_metrics.win_rate:.2%}")
@@ -255,27 +263,36 @@ python run_tests.py --all
 
 # 5. Use the Python API for trading analysis
 python -c "
-from src.strategies import create_strategy, get_all_strategies
+from src.strategies import create_strategy
 from src.data.mock_generator import MockDataGenerator
 from src.backtest.engine import BacktestEngine
+from src.core.models import MarketData, TimeFrame
 
 # Generate test data
 generator = MockDataGenerator()
-data = generator.generate_realistic_data('SPY', periods=252)
+ohlcv_data = generator.generate_realistic_data('SPY', periods=252)
+
+# Create MarketData object
+market_data = MarketData(
+    symbol='SPY',
+    timeframe=TimeFrame.DAILY,
+    data=ohlcv_data,
+    indicators={},
+    last_updated=ohlcv_data[-1].timestamp
+)
 
 # Test a strategy
 strategy = create_strategy('macd_rsi')
 engine = BacktestEngine()
-result = engine.run_backtest(strategy, data, initial_capital=10000)
+result = engine.run_backtest(strategy, market_data, initial_capital=10000)
 print(f'MACD+RSI Strategy Result: {result.performance_metrics.total_return_pct:.2%} return')
 "
 
 # 6. Explore all available strategies
 python -c "
-from src.strategies import get_all_strategies
-strategies = get_all_strategies()
-for name, meta in strategies.items():
-    print(f'{meta[\"name\"]}: {meta[\"description\"]}')
+from src.strategies import STRATEGY_REGISTRY
+for name, strategy_class in STRATEGY_REGISTRY.items():
+    print(f'{name}: {strategy_class.__doc__ or \"Trading strategy\"}')
 "
 ```
 
@@ -287,16 +304,13 @@ The Wagehood system provides a Python API for multi-strategy multi-timeframe ana
 
 **Strategy Analysis:**
 ```python
-from src.strategies import create_strategy, get_all_strategies, STRATEGY_METADATA
+from src.strategies import create_strategy, STRATEGY_REGISTRY
 from src.data.mock_generator import MockDataGenerator
 from src.backtest.engine import BacktestEngine
 
 # Explore available strategies
-strategies = get_all_strategies()
-for name, metadata in strategies.items():
-    print(f"{metadata['name']}: {metadata['description']}")
-    print(f"Difficulty: {metadata['difficulty']}")
-    print(f"Priority: {metadata['priority']}")
+for name, strategy_class in STRATEGY_REGISTRY.items():
+    print(f"{name}: {strategy_class.__doc__ or 'Trading strategy'}")
 
 # Create and test a strategy
 strategy = create_strategy('macd_rsi')
@@ -330,14 +344,14 @@ for name, result in results.items():
 
 **Real-time Data Processing:**
 ```python
-from src.realtime.data_ingestion import DataIngestionManager
-from src.realtime.signal_engine import SignalEngine
-from src.realtime.timeframe_manager import TimeframeManager
+from src.realtime.data_ingestion import create_ingestion_service
+from src.realtime.calculation_engine import CalculationEngine
+from src.realtime.config_manager import ConfigManager
 
 # Set up real-time processing (requires Redis)
-data_manager = DataIngestionManager()
-signal_engine = SignalEngine()
-timeframe_manager = TimeframeManager()
+config = ConfigManager()
+ingestion_service = create_ingestion_service(config)
+calc_engine = CalculationEngine()
 
 # Configure multi-timeframe analysis
 symbols = ['SPY', 'QQQ', 'AAPL']
@@ -605,213 +619,87 @@ print(f"Best parameters: {best_params}")
 print(f"Best return: {best_result.performance_metrics.total_return_pct:.2%}")
 ```
 
-### Output Formats
+### Data Analysis Output
 
-**Table Format (Default):**
-```
-Symbol    Price    Change    Volume       RSI     MACD
-SPY       485.67   +2.34     12,345,678   65.23   +0.45
-QQQ       395.21   -1.87     8,765,432    58.91   -0.23
-```
+The Python API returns structured data objects that can be easily processed:
 
-**JSON Format:**
-```bash
-python market_analysis_cli.py data --symbol SPY --format json
-```
+```python
+# Example: Getting strategy performance data
+result = engine.run_backtest(strategy, data, initial_capital=10000)
+performance = result.performance_metrics
 
-**CSV Format:**
-```bash
-python market_analysis_cli.py export --symbol SPY --format csv
+print(f"Total Return: {performance.total_return_pct:.2%}")
+print(f"Win Rate: {performance.win_rate:.2%}")
+print(f"Sharpe Ratio: {performance.sharpe_ratio:.2f}")
+print(f"Max Drawdown: {performance.max_drawdown_pct:.2%}")
 ```
 
 ## 📊 Strategy Analysis
 
-### Overview
+The system provides comprehensive strategy analysis through the Python API, helping traders determine which strategies work best for their specific trading style and market conditions.
 
-The Strategy Analysis feature helps traders determine which strategies work best for their specific trading style and market conditions. It analyzes all available strategies across three distinct trading styles and provides recommendations based on performance metrics.
+### Trading Style Analysis
 
-### Trading Styles Analyzed
+The Python API can analyze strategies across different trading styles:
 
-**Day Trading (Short-term, High Frequency)**
-- Hold time: Less than 24 hours
-- Focus: High-frequency signals, consistent small wins
-- Best for: Active traders who can monitor positions throughout the day
-- Preferred metrics: High win rate, frequent signals, low drawdown
+```python
+from src.analysis.strategy_analyzer import StrategyAnalyzer
+from src.data.mock_generator import MockDataGenerator
 
-**Swing Trading (Medium-term, 1-10 days)**
-- Hold time: 1-10 days
-- Focus: Capturing medium-term price movements
-- Best for: Part-time traders who check positions daily
-- Preferred metrics: Balanced win rate and return per trade
+# Initialize analyzer
+analyzer = StrategyAnalyzer()
+generator = MockDataGenerator()
 
-**Position Trading (Long-term, >10 days)**
-- Hold time: More than 10 days
-- Focus: Major trend following with higher returns per trade
-- Best for: Buy-and-hold investors with patience for larger moves
-- Preferred metrics: Higher returns per trade, lower frequency
+# Analyze strategy across different timeframes/styles
+strategy_results = {}
+for style in ['day_trading', 'swing_trading', 'position_trading']:
+    data = generator.generate_realistic_data('SPY', periods=252)
+    strategy = create_strategy('macd_rsi')
+    engine = BacktestEngine()
+    result = engine.run_backtest(strategy, data, initial_capital=10000)
+    strategy_results[style] = result.performance_metrics
 
-### Key Metrics Analyzed
-
-**Performance Metrics:**
-- **Win Rate**: Percentage of profitable trades
-- **Average Return per Trade**: Expected profit/loss per signal
-- **Profit Factor**: Ratio of gross profit to gross loss
-- **Maximum Drawdown**: Worst peak-to-trough decline
-- **Sharpe Ratio**: Risk-adjusted returns
-- **Total Return**: Overall portfolio performance
-
-**Trading Characteristics:**
-- **Number of Signals**: Frequency of trading opportunities
-- **Average Hold Time**: How long positions are typically held
-- **Style Fit Rating**: Overall suitability (Excellent/Good/Fair/Poor)
-- **Recommendation Score**: Composite score (0-1) for each trading style
-
-### Available Analysis Commands
-
-#### 1. Strategy Effectiveness Analysis
-```bash
-# Analyze all strategies for a symbol
-python market_analysis_cli.py analyze --symbol SPY
-
-# Analyze specific strategies
-python market_analysis_cli.py analyze --symbol AAPL --strategies ma_crossover,macd_rsi
-
-# Use different time periods
-python market_analysis_cli.py analyze --symbol TSLA --period 6m
-python market_analysis_cli.py analyze --symbol QQQ --period 2y
-
-# Get JSON output for programmatic use
-python market_analysis_cli.py analyze --symbol SPY --format json
-
-# Test with mock data (development)
-python market_analysis_cli.py analyze --symbol SPY --use-mock-data
+# Compare results
+for style, metrics in strategy_results.items():
+    print(f"{style}: {metrics.total_return_pct:.2%} return, {metrics.win_rate:.1%} win rate")
 ```
 
-#### 2. Strategy Comparison
-```bash
-# Compare 2-5 specific strategies
-python market_analysis_cli.py compare --strategies ma_crossover,macd_rsi
+### Performance Evaluation
 
-# Compare with different symbol/period
-python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend,bollinger_breakout --symbol AAPL --period 1y
+The system provides detailed performance metrics for strategy evaluation:
 
-# Get detailed comparison in JSON format
-python market_analysis_cli.py compare --strategies ma_crossover,macd_rsi --format json
+```python
+# Comprehensive strategy evaluation
+def evaluate_strategy(strategy_name, symbol, periods=252):
+    strategy = create_strategy(strategy_name)
+    generator = MockDataGenerator()
+    data = generator.generate_realistic_data(symbol, periods=periods)
+    
+    engine = BacktestEngine()
+    result = engine.run_backtest(strategy, data, initial_capital=10000)
+    
+    metrics = result.performance_metrics
+    return {
+        'win_rate': metrics.win_rate,
+        'total_return': metrics.total_return_pct,
+        'sharpe_ratio': metrics.sharpe_ratio,
+        'max_drawdown': metrics.max_drawdown_pct,
+        'profit_factor': metrics.profit_factor,
+        'total_trades': metrics.total_trades
+    }
+
+# Evaluate multiple strategies
+strategies = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
+for strategy_name in strategies:
+    metrics = evaluate_strategy(strategy_name, 'SPY')
+    print(f"{strategy_name}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
 ```
-
-#### 3. List Available Strategies
-```bash
-# Show all strategies with metadata
-python market_analysis_cli.py strategies
-
-# Get machine-readable output
-python market_analysis_cli.py strategies --format json
-```
-
-### Interpreting Results
-
-#### Summary Table
-The results start with a summary table showing:
-- **Overall Score**: Best recommendation score across all trading styles
-- **Best Style**: Recommended trading style for each strategy
-- **Style Indicators**: Visual indicators for each style (●=Excellent, ●=Good, ●=Fair, ●=Poor)
-
-#### Detailed Analysis
-For the top-performing strategies, detailed metrics are shown:
-
-```
-Strategy: MACD+RSI Combined - SPY
-┌─────────────────────┬─────────────┬──────────────┬──────────────────┐
-│ Metric              │ Day Trading │ Swing Trading│ Position Trading │
-├─────────────────────┼─────────────┼──────────────┼──────────────────┤
-│ Win Rate            │ 68.5%       │ 73.2%        │ 71.8%            │
-│ Avg Return/Trade    │ 0.64%       │ 0.88%        │ 1.24%            │
-│ Profit Factor       │ 1.89        │ 2.14         │ 2.03             │
-│ Num Signals         │ 124         │ 67           │ 23               │
-│ Avg Hold Time       │ 18.5h       │ 4.2 days     │ 18.7 days        │
-│ Recommendation      │ 0.72 (Good) │ 0.85 (Excellent) │ 0.78 (Good) │
-└─────────────────────┴─────────────┴──────────────┴──────────────────┘
-
-Recommendation: Best Trading Style: Swing Trading
-Style Fit: Excellent
-Expected Win Rate: 73.2%
-Expected Return/Trade: 0.88%
-Signals per Year: 67
-Average Hold Time: 4.2 days
-```
-
-#### Recommendation Guidelines
-
-**Excellent (0.8-1.0)**: Recommended for this trading style
-- Strategy shows good performance across multiple metrics
-- Suitable for the time horizon and risk profile
-- Expected to generate returns
-
-**Good (0.6-0.8)**: Acceptable with some considerations
-- Good performance with minor areas for improvement
-- Fits the trading style with reasonable expectations
-- May require additional risk management
-
-**Fair (0.4-0.6)**: Acceptable but not optimal
-- Mixed performance that may work in certain market conditions
-- Consider combining with other strategies or indicators
-- Higher risk or lower consistency expected
-
-**Poor (0.0-0.4)**: Not recommended for this trading style
-- Strategy doesn't align well with the time horizon
-- Inconsistent performance or unfavorable metrics
-- Consider alternative strategies or different time frames
-
-### Usage Examples
-
-#### Example 1: Finding the Best Strategy for SPY
-```bash
-$ python market_analysis_cli.py analyze --symbol SPY
-
-Strategy Effectiveness Analysis for SPY
-Analysis Period: 1y
-Strategies Analyzed: 5
-Data Source: Worker Service
-
-Summary Recommendations:
-1. MACD+RSI Combined - Best for Swing Trading
-   Win Rate: 73.2%, Avg Return: 0.88%, Signals: 67
-2. RSI Trend Following - Best for Day Trading
-   Win Rate: 71.5%, Avg Return: 0.62%, Signals: 89
-3. Bollinger Band Breakout - Best for Position Trading
-   Win Rate: 68.9%, Avg Return: 1.15%, Signals: 34
-```
-
-#### Example 2: Comparing Momentum Strategies
-```bash
-$ python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend --symbol AAPL
-
-# This will show a direct comparison of the two momentum-based strategies
-# highlighting which performs better for different trading styles
-```
-
-#### Example 3: Development and Testing
-```bash
-# Test analysis with mock data during development
-$ python market_analysis_cli.py analyze --symbol SPY --use-mock-data
-
-# This generates realistic market data for testing without API calls
-```
-
-### Usage Tips
-
-1. **Start with Broad Analysis**: Use `strategy-effectiveness` to get an overview
-2. **Narrow Down**: Use `compare-strategies` for detailed comparisons
-3. **Consider Your Style**: Choose strategies that match your available time and risk tolerance
-4. **Validate Results**: Test with different symbols and time periods
-5. **Paper Trade First**: Always validate strategies with paper trading before live implementation
-6. **Monitor Performance**: Regularly re-analyze as market conditions change
 
 ## 📖 Strategy Documentation & Explanations
 
 ### Understanding Strategy Logic
 
-The system includes documentation for all trading strategies, accessible through the CLI. Each strategy explanation covers:
+The system provides comprehensive strategy documentation through the Python API. Each strategy includes:
 
 - **Signal Generation Logic**: Exact conditions for buy/sell signals
 - **Parameter Configuration**: Default values with descriptions and ranges
@@ -819,123 +707,100 @@ The system includes documentation for all trading strategies, accessible through
 - **Special Features**: Unique capabilities and advantages
 - **Usage Guidelines**: Best trading styles and market conditions
 
-### Strategy Explanation Command
+### Accessing Strategy Information
 
-```bash
-# View detailed explanation for a specific strategy
-python market_analysis_cli.py explain --strategy macd_rsi
+```python
+from src.strategies import STRATEGY_REGISTRY, create_strategy
 
-# Get structured JSON output for integration
-python market_analysis_cli.py explain --strategy bollinger_breakout --format json
+# View all available strategies
+for name, strategy_class in STRATEGY_REGISTRY.items():
+    print(f"{name}: {strategy_class.__doc__ or 'Trading strategy'}")
 
-# Show overview of all available strategies
-python market_analysis_cli.py strategies --detailed
+# Get strategy with default parameters
+strategy = create_strategy('macd_rsi')
+print(f"Strategy: {strategy.__class__.__name__}")
+
+# Access strategy documentation
+strategy = create_strategy('macd_rsi')
+if hasattr(strategy, 'get_strategy_info'):
+    info = strategy.get_strategy_info()
+    print(f"Description: {info.get('description', 'N/A')}")
+    print(f"Parameters: {info.get('parameters', {})}")
 ```
 
-### Example Output
+### Available Strategy Information
 
-When you run `python market_analysis_cli.py explain --strategy macd_rsi`, you'll see:
+| Strategy | Key | Focus | Implementation |
+|----------|-----|-------|----------------|
+| **MACD + RSI Combined** | `macd_rsi` | Momentum + timing | High-performance momentum strategy |
+| **Moving Average Crossover** | `ma_crossover` | Trend following | Classic trend-following approach |
+| **RSI Trend Following** | `rsi_trend` | Trend + pullbacks | Trend-aware RSI with pullbacks |
+| **Bollinger Band Breakout** | `bollinger_breakout` | Volatility expansion | Volatility expansion strategy |
+| **Support/Resistance Breakout** | `sr_breakout` | Key level trading | Level-based breakout trading |
 
-```
-MACD + RSI Combined Strategy
-High-performance momentum strategy combining MACD trend detection with RSI 
-timing. Documented 73% win rate.
+### Strategy Parameter Inspection
 
- Difficulty:        Intermediate                                                
- Signal Frequency:  Medium (selective entries)                                  
- Best For:          Momentum trading, Trend following, Short to medium-term     
-                    trades                                                      
+```python
+# Inspect strategy parameters and signals
+strategy = create_strategy('macd_rsi')
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=100)
 
-🟢 BUY SIGNALS
+# Generate signals to understand strategy behavior
+signals = strategy.generate_signals(data)
+print(f"Generated {len(signals)} signals")
 
-MACD Bullish Crossover + RSI Exit from Oversold:
-  • MACD line crosses ABOVE signal line
-  • RSI moves ABOVE 30 (from below 30)
+# Analyze signal distribution
+signal_types = {}
+for signal in signals:
+    signal_types[signal.signal_type.value] = signal_types.get(signal.signal_type.value, 0) + 1
 
-MACD Bullish Crossover + RSI Uptrend + Positive Momentum:
-  • MACD line crosses ABOVE signal line
-  • RSI is ABOVE 50 (uptrend zone)
-  • MACD histogram is POSITIVE
-
-🔴 SELL SIGNALS
-
-MACD Bearish Crossover + RSI Exit from Overbought:
-  • MACD line crosses BELOW signal line
-  • RSI moves BELOW 70 (from above 70)
-
-⚙️ DEFAULT PARAMETERS
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Parameter           ┃ Default ┃ Description                     ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ macd_fast           │      12 │ MACD fast EMA period            │
-│ macd_slow           │      26 │ MACD slow EMA period            │
-│ rsi_period          │      14 │ RSI calculation period          │
-│ min_confidence      │     0.6 │ Minimum signal confidence (60%) │
-└─────────────────────┴─────────┴─────────────────────────────────┘
-
-🎯 CONFIDENCE CALCULATION
-┏━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Factor        ┃ Weight ┃ Description                             ┃
-┡━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Macd Strength │  25%   │ Distance between MACD and signal lines  │
-│ Rsi Position  │  25%   │ How close RSI is to oversold/overbought │
-│ Volume        │  15%   │ Current volume vs 20-day average        │
-└───────────────┴────────┴─────────────────────────────────────────┘
-
-✨ SPECIAL FEATURES
-  • Only executes signals with ≥60% confidence
-  • Divergence detection for reversal opportunities
-  • Volume confirmation with 20-day average
-```
-
-### Available Strategy Documentation
-
-| Strategy | Key | Difficulty | Frequency | Focus |
-|----------|-----|------------|-----------|--------|
-| **MACD + RSI Combined** | `macd_rsi` | Intermediate | Medium | Momentum + timing |
-| **Moving Average Crossover** | `ma_crossover` | Beginner | Low | Trend following |
-| **RSI Trend Following** | `rsi_trend` | Intermediate | Medium | Trend + pullbacks |
-| **Bollinger Band Breakout** | `bollinger_breakout` | Intermediate | Medium | Volatility expansion |
-| **Support/Resistance Breakout** | `sr_breakout` | Complex | Low | Key level trading |
-
-### Integration with Analysis
-
-Use strategy explanations alongside performance analysis:
-
-```bash
-# 1. Analyze strategy effectiveness
-python market_analysis_cli.py analyze --symbol SPY
-
-# 2. Get detailed explanation of top performer
-python market_analysis_cli.py explain --strategy macd_rsi
-
-# 3. Compare similar strategies
-python market_analysis_cli.py compare --strategies macd_rsi,rsi_trend
-
-# 4. Understand the logic behind the winner
-python market_analysis_cli.py explain --strategy rsi_trend --format json
+for signal_type, count in signal_types.items():
+    print(f"{signal_type}: {count} signals")
 ```
 
 ## 📈 Period-Based Returns Analysis
 
 ### Overview
 
-The period-based returns analysis provides detailed insight into how strategies perform across different time horizons. This feature tracks daily, weekly, and monthly returns along with Year-to-Date (YTD) performance metrics.
+The system provides detailed period-based returns analysis through the Python API, offering insight into how strategies perform across different time horizons. This includes daily, weekly, and monthly returns along with Year-to-Date (YTD) performance metrics.
 
-### Period Returns Command
+### Period Returns Analysis
 
-```bash
-# Analyze period returns for a strategy and symbol
-python market_analysis_cli.py period-returns --strategy macd_rsi --symbol AAPL
+```python
+from src.backtest.engine import BacktestEngine
+from src.strategies import create_strategy
+from src.data.mock_generator import MockDataGenerator
+from datetime import datetime, timedelta
 
-# Use different time periods
-python market_analysis_cli.py period-returns --strategy ma_crossover --symbol MSFT --period 6m
+# Analyze strategy returns across different periods
+def analyze_period_returns(strategy_name, symbol, periods=252):
+    strategy = create_strategy(strategy_name)
+    generator = MockDataGenerator()
+    data = generator.generate_realistic_data(symbol, periods=periods)
+    
+    engine = BacktestEngine()
+    result = engine.run_backtest(strategy, data, initial_capital=10000)
+    
+    # Access period-based returns from performance metrics
+    performance = result.performance_metrics
+    
+    return {
+        'daily_returns': performance.daily_returns,
+        'weekly_returns': performance.weekly_returns,
+        'monthly_returns': performance.monthly_returns,
+        'ytd_return': performance.ytd_return,
+        'avg_daily_return': performance.avg_daily_return,
+        'avg_weekly_return': performance.avg_weekly_return,
+        'avg_monthly_return': performance.avg_monthly_return
+    }
 
-# Get structured JSON output
-python market_analysis_cli.py period-returns --strategy bollinger_breakout --symbol TSLA --format json
-
-# Test with mock data
-python market_analysis_cli.py period-returns --strategy rsi_trend --symbol SPY --mock-data
+# Example usage
+returns_analysis = analyze_period_returns('macd_rsi', 'AAPL')
+print(f"Average Daily Return: {returns_analysis['avg_daily_return']:.4f}")
+print(f"Average Weekly Return: {returns_analysis['avg_weekly_return']:.4f}")
+print(f"Average Monthly Return: {returns_analysis['avg_monthly_return']:.4f}")
+print(f"YTD Return: {returns_analysis['ytd_return']:.2%}")
 ```
 
 ### Key Metrics Provided
@@ -960,29 +825,86 @@ python market_analysis_cli.py period-returns --strategy rsi_trend --symbol SPY -
 - YTD versus historical comparison
 - Annual performance tracking
 
-### Use Cases
-
-1. **Performance Review**: Track how strategies perform over specific periods
-2. **Volatility Analysis**: Identify periods of high/low strategy volatility
-3. **Seasonal Patterns**: Discover if strategies work better in certain months
-4. **Risk Assessment**: Understand drawdown patterns across time periods
-5. **Strategy Tuning**: Optimize parameters based on period-specific performance
-
-### Integration with Backtesting
-
-The analysis results can be used to configure backtesting parameters:
+### Advanced Period Analysis
 
 ```python
-# Based on analysis results, configure backtest
-from src.strategies import MACDRSIStrategy
-from src.backtest import BacktestEngine
+# Advanced period-based analysis
+def detailed_period_analysis(strategy_name, symbol):
+    strategy = create_strategy(strategy_name)
+    generator = MockDataGenerator()
+    data = generator.generate_realistic_data(symbol, periods=365)  # One year of data
+    
+    engine = BacktestEngine()
+    result = engine.run_backtest(strategy, data, initial_capital=10000)
+    
+    performance = result.performance_metrics
+    
+    # Analyze period returns
+    if performance.daily_returns:
+        daily_volatility = np.std([r.return_pct for r in performance.daily_returns])
+        best_day = max(performance.daily_returns, key=lambda x: x.return_pct)
+        worst_day = min(performance.daily_returns, key=lambda x: x.return_pct)
+        
+        print(f"Daily Volatility: {daily_volatility:.4f}")
+        print(f"Best Day: {best_day.return_pct:.2%} on {best_day.period_start.date()}")
+        print(f"Worst Day: {worst_day.return_pct:.2%} on {worst_day.period_start.date()}")
+    
+    # Seasonal analysis
+    if performance.monthly_returns:
+        monthly_performance = {}
+        for month_return in performance.monthly_returns:
+            month = month_return.period_start.month
+            if month not in monthly_performance:
+                monthly_performance[month] = []
+            monthly_performance[month].append(month_return.return_pct)
+        
+        print("\nSeasonal Performance:")
+        for month, returns in monthly_performance.items():
+            avg_return = sum(returns) / len(returns)
+            print(f"Month {month}: {avg_return:.2%} average return")
 
-# Use the recommended strategy
-strategy = MACDRSIStrategy()
-engine = BacktestEngine()
+# Example usage
+detailed_period_analysis('macd_rsi', 'SPY')
+```
 
-# Configure based on analysis (e.g., swing trading parameters)
-result = engine.run_backtest(strategy, data, initial_capital=10000)
+### Integration with Strategy Development
+
+Use period analysis results to optimize strategy parameters:
+
+```python
+# Use period analysis for strategy optimization
+def optimize_strategy_by_periods(strategy_name, symbol):
+    base_strategy = create_strategy(strategy_name)
+    generator = MockDataGenerator()
+    
+    # Test different parameter sets
+    parameter_sets = [
+        {'rsi_period': 10, 'rsi_overbought': 75, 'rsi_oversold': 25},
+        {'rsi_period': 14, 'rsi_overbought': 70, 'rsi_oversold': 30},
+        {'rsi_period': 21, 'rsi_overbought': 65, 'rsi_oversold': 35}
+    ]
+    
+    best_params = None
+    best_monthly_return = -float('inf')
+    
+    for params in parameter_sets:
+        strategy = create_strategy(strategy_name, params)
+        data = generator.generate_realistic_data(symbol, periods=252)
+        
+        engine = BacktestEngine()
+        result = engine.run_backtest(strategy, data, initial_capital=10000)
+        
+        avg_monthly_return = result.performance_metrics.avg_monthly_return
+        if avg_monthly_return > best_monthly_return:
+            best_monthly_return = avg_monthly_return
+            best_params = params
+    
+    return best_params, best_monthly_return
+
+# Example optimization
+best_params, best_return = optimize_strategy_by_periods('rsi_trend', 'SPY')
+print(f"Best parameters: {best_params}")
+print(f"Best monthly return: {best_return:.4f}")
 ```
 
 ## 🔗 Alpaca Markets Integration
@@ -1273,12 +1195,10 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY src/ src/
-COPY run_realtime.py .
-COPY market_analysis_cli.py .
-COPY market_watch.py .
+COPY scripts/ scripts/
 RUN pip install -e .
 
-CMD ["python", "run_realtime.py"]
+CMD ["python", "-c", "from src.realtime.data_ingestion import create_ingestion_service; import asyncio; service = create_ingestion_service(); asyncio.run(service.start())"]
 ```
 
 ### Docker Compose
@@ -1295,7 +1215,7 @@ services:
     
   wagehood-realtime:
     build: .
-    command: python run_realtime.py
+    command: python -c "from src.realtime.data_ingestion import create_ingestion_service; import asyncio; service = create_ingestion_service(); asyncio.run(service.start())"
     environment:
       - REDIS_HOST=redis
       - CALCULATION_WORKERS=4
@@ -1346,10 +1266,18 @@ spec:
 
 ```bash
 # System health check
-python market_analysis_cli.py --help
+python -c "from src.core.models import OHLCV; from src.strategies import create_strategy; print('System operational')"
 
-# Performance metrics
-python market_watch.py --symbols SPY --duration 10
+# Test strategy execution
+python -c "
+from src.strategies import create_strategy
+from src.data.mock_generator import MockDataGenerator
+strategy = create_strategy('macd_rsi')
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=10)
+signals = strategy.generate_signals(data)
+print(f'Generated {len(signals)} signals - System healthy')
+"
 
 # System ping test
 redis-cli ping
@@ -1408,40 +1336,61 @@ redis-server
 echo $REDIS_HOST $REDIS_PORT
 ```
 
-#### System Connection Errors
+#### Python API Connection Errors
 ```bash
-# Test CLI connectivity
-python market_analysis_cli.py --help
+# Test Python API connectivity
+python -c "from src.core.models import OHLCV; print('Core API working')"
 
-# Check if worker service is running
-ps aux | grep run_realtime.py
+# Test strategy imports
+python -c "from src.strategies import create_strategy; print('Strategies working')"
 
-# Start real-time processing
-python run_realtime.py
+# Test data providers
+python -c "from src.data.mock_generator import MockDataGenerator; print('Data providers working')"
 ```
 
 #### No Data Processing
 ```bash
-# Validate configuration
-python run_realtime.py --validate-only
+# Test data generation
+python -c "
+from src.data.mock_generator import MockDataGenerator
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=10)
+print(f'Generated {len(data)} data points')
+"
 
-# Check enabled symbols
-python run_realtime.py --show-config
-
-# Enable debug logging
-python run_realtime.py --log-level DEBUG
+# Test strategy execution
+python -c "
+from src.strategies import create_strategy
+from src.data.mock_generator import MockDataGenerator
+strategy = create_strategy('macd_rsi')
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=100)
+signals = strategy.generate_signals(data)
+print(f'Generated {len(signals)} signals')
+"
 ```
 
 #### Alpaca Integration Issues
 ```bash
 # Test Alpaca credentials
-python scripts/setup_alpaca.py
+python -c "
+import os
+api_key = os.getenv('ALPACA_API_KEY')
+secret_key = os.getenv('ALPACA_SECRET_KEY')
+print(f'API Key: {\"Set\" if api_key else \"Not set\"}')
+print(f'Secret Key: {\"Set\" if secret_key else \"Not set\"}')
+"
 
-# Check environment variables
-echo $ALPACA_API_KEY $ALPACA_SECRET_KEY
-
-# Verify account status
-python run_realtime.py --provider alpaca --log-level DEBUG
+# Test Alpaca data provider
+python -c "
+from src.data.providers.alpaca_provider import AlpacaProvider
+import os
+if os.getenv('ALPACA_API_KEY'):
+    provider = AlpacaProvider()
+    print('Alpaca provider initialized')
+else:
+    print('Alpaca credentials not found')
+"
 ```
 
 #### High Memory Usage
@@ -1452,31 +1401,48 @@ redis-cli info memory
 # Adjust stream retention
 export REDIS_STREAMS_MAXLEN=5000
 
-# Check system metrics
-python market_analysis_cli.py --help
+# Test system memory usage
+python -c "
+import psutil
+import os
+process = psutil.Process(os.getpid())
+memory_mb = process.memory_info().rss / 1024 / 1024
+print(f'Current process memory: {memory_mb:.1f} MB')
+"
 ```
 
 ### Debug Mode
 
 ```bash
-# Enable verbose logging
-python market_analysis_cli.py --verbose data --symbol SPY
-python market_watch.py --debug
+# Enable verbose logging for Python API
+python -c "
+import logging
+logging.basicConfig(level=logging.DEBUG)
+from src.strategies import create_strategy
+from src.data.mock_generator import MockDataGenerator
+strategy = create_strategy('macd_rsi')
+generator = MockDataGenerator()
+data = generator.generate_realistic_data('SPY', periods=50)
+signals = strategy.generate_signals(data)
+print(f'Debug: Generated {len(signals)} signals')
+"
 
-# Check specific component logs
-grep "CalculationEngine" realtime_processor_*.log
-grep "MarketDataIngestion" realtime_processor_*.log
-
-# Monitor logs in real-time
-python run_realtime.py --log-level DEBUG
+# Test with detailed error handling
+python -c "
+try:
+    from src.backtest.engine import BacktestEngine
+    print('BacktestEngine imported successfully')
+except Exception as e:
+    print(f'Error importing BacktestEngine: {e}')
+"
 ```
 
 ### Performance Optimization
 
 1. **Use caching**: Redis caches recent data for faster responses
 2. **Batch operations**: Process multiple symbols together with worker service
-3. **Limit output**: Use `--limit` for large datasets in CLI tools
-4. **Stream carefully**: Monitor bandwidth usage with market_watch.py
+3. **Limit data size**: Use reasonable periods (e.g., 252 days) for backtesting
+4. **Optimize calculations**: Use NumPy arrays when available for indicator calculations
 5. **Optimize Redis**: Tune memory and connection settings for worker service
 
 ## 📚 Research Foundation
