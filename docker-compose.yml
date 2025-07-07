@@ -1,0 +1,91 @@
+services:
+  wagehood:
+    build: .
+    image: wagehood:latest
+    container_name: wagehood-trading
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - WAGEHOOD_ENV=production
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
+      # MANDATORY: Alpaca credentials (set via .env file or docker run -e)
+      - ALPACA_API_KEY=${ALPACA_API_KEY:?ALPACA_API_KEY environment variable is required}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:?ALPACA_SECRET_KEY environment variable is required}
+      # Optional: Alpaca configuration
+      - ALPACA_PAPER_TRADING=${ALPACA_PAPER_TRADING:-true}
+      - ALPACA_DATA_FEED=${ALPACA_DATA_FEED:-iex}
+    
+    # Port mapping
+    ports:
+      - "6379:6379"  # Redis port
+    
+    # Volume mounts for data persistence
+    volumes:
+      - wagehood-data:/app/data
+      - wagehood-logs:/app/logs
+      # Optional: Mount custom configuration
+      # - ./config:/app/config:ro
+    
+    # Comprehensive health check with Alpaca connectivity validation
+    healthcheck:
+      test: ["CMD", "python", "docker-healthcheck.py"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Separate Redis container for production
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: wagehood-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # Optional: Monitoring with Redis Insight
+  # redis-insight:
+  #   image: redislabs/redis-insight:latest
+  #   container_name: wagehood-redis-insight
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8001"
+  #   volumes:
+  #     - redis-insight-data:/db
+
+volumes:
+  wagehood-data:
+    driver: local
+  wagehood-logs:
+    driver: local
+  # redis-data:
+  #   driver: local
+  # redis-insight-data:
+  #   driver: local
+
+# Networks (optional)
+networks:
+  default:
+    name: wagehood-network
+    driver: bridge
