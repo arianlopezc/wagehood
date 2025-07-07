@@ -154,12 +154,13 @@ class NotificationService:
             if not self.discord_notifier:
                 return
             
+            timeframes_str = ', '.join(self.config.timeframes_to_notify) if self.config.timeframes_to_notify else 'All'
             status_data = {
                 'service': 'Discord Notification Service',
                 'status': 'running',
                 'symbol_count': len(self.config.symbols_to_notify) if self.config.symbols_to_notify else 'All',
                 'data_provider': 'Alpaca Markets',
-                'message': f'Monitoring {", ".join(self.config.trading_profiles)} signals'
+                'message': f'Monitoring {", ".join(self.config.trading_profiles)} signals for {timeframes_str} timeframes'
             }
             
             success = self.discord_notifier.send_system_status(status_data)
@@ -277,42 +278,138 @@ class NotificationService:
             # Parse results JSON
             results = json.loads(fields['results'])
             
-            # Look for signal data in results
-            signal_data = results.get('signal')
-            if not signal_data:
-                return None
-            
             # Extract symbol
             symbol = fields.get('symbol', results.get('symbol', 'UNKNOWN'))
             
-            # Build notification data
-            notification_data = {
-                'symbol': symbol,
-                'signal': signal_data.get('action', 'UNKNOWN').upper(),
-                'price': signal_data.get('price', 0.0),
-                'price_change': signal_data.get('price_change', 0.0),
-                'price_change_pct': signal_data.get('price_change_pct', 0.0),
-                'strategy': signal_data.get('strategy', 'Unknown Strategy'),
-                'confidence': signal_data.get('confidence', 0.0),
-                'details': signal_data.get('details', {}),
-                'timestamp': datetime.now()
-            }
+            # Look for timeframe-specific signals (prioritize 1d timeframe for notifications)
+            timeframe_results = results.get('timeframe_results', {})
+            signal_data = None
+            notification_timeframe = None
             
-            # Add company name if available
-            company_names = {
-                'AAPL': 'Apple Inc.',
-                'MSFT': 'Microsoft Corp.',
-                'GOOGL': 'Alphabet Inc.',
-                'TSLA': 'Tesla Inc.',
-                'SPY': 'SPDR S&P 500 ETF',
-                'QQQ': 'Invesco QQQ ETF',
-                'IWM': 'iShares Russell 2000 ETF'
-            }
+            # Check for 1d timeframe signals first (priority for Discord notifications)
+            for timeframe in ['1d', '4h', '1h', '5m', '1m']:
+                if timeframe in timeframe_results:
+                    tf_data = timeframe_results[timeframe]
+                    if 'signal' in tf_data and tf_data['signal']:
+                        # Check if this timeframe should trigger notifications
+                        if self.config.should_notify_timeframe(timeframe):
+                            signal_data = tf_data['signal']
+                            notification_timeframe = timeframe
+                            break
             
-            if symbol in company_names:
-                notification_data['company_name'] = company_names[symbol]
+            # If no timeframe-specific signal found, check composite signal
+            if not signal_data:
+                composite_signal = results.get('composite_signal')
+                if composite_signal:
+                    # Use composite signal but mark as 1d timeframe for consistency
+                    notification_timeframe = '1d'
+                    
+                    # Build notification data from composite signal
+                    notification_data = {
+                        'symbol': symbol,
+                        'signal': composite_signal.get('direction', 'UNKNOWN').upper(),
+                        'price': 0.0,  # Price not directly available in composite signal
+                        'price_change': 0.0,
+                        'price_change_pct': 0.0,
+                        'strategy': 'Multi-Timeframe Composite',
+                        'confidence': composite_signal.get('confidence', 0.0),
+                        'timeframe': notification_timeframe,
+                        'details': {
+                        'timeframes_analyzed': composite_signal.get('timeframes_analyzed', 0),
+                        'strength': composite_signal.get('strength', 'unknown'),
+                        'timeframe_alignment': composite_signal.get('timeframe_alignment', 0.0),
+                        'strategy_alignment': composite_signal.get('strategy_alignment', 0.0),
+                        'contributing_signals': composite_signal.get('contributing_signals', 0)
+                    },
+                    'timestamp': datetime.now(),
+                    'timeframe': 'composite',  # Mark as composite signal
+                    'source_timeframes': self._extract_source_timeframes(results)
+                }
+                
+                # Add company name if available
+                company_names = {
+                    'AAPL': 'Apple Inc.',
+                    'MSFT': 'Microsoft Corp.',
+                    'GOOGL': 'Alphabet Inc.',
+                    'TSLA': 'Tesla Inc.',
+                    'SPY': 'SPDR S&P 500 ETF',
+                    'QQQ': 'Invesco QQQ ETF',
+                    'IWM': 'iShares Russell 2000 ETF'
+                }
+                
+                if symbol in company_names:
+                    notification_data['company_name'] = company_names[symbol]
+                
+                return notification_data
+                
+            # Process timeframe-specific signal data
+            if signal_data and notification_timeframe:
+                # Build notification data from timeframe-specific signal
+                notification_data = {
+                    'symbol': symbol,
+                    'signal': signal_data.get('action', 'UNKNOWN').upper(),
+                    'price': signal_data.get('price', 0.0),
+                    'price_change': signal_data.get('price_change', 0.0),
+                    'price_change_pct': signal_data.get('price_change_pct', 0.0),
+                    'strategy': signal_data.get('strategy', 'Unknown Strategy'),
+                    'confidence': signal_data.get('confidence', 0.0),
+                    'timeframe': notification_timeframe,
+                    'details': signal_data.get('details', {}),
+                    'timestamp': datetime.now()
+                }
+                
+                # Add company name if available
+                company_names = {
+                    'AAPL': 'Apple Inc.',
+                    'MSFT': 'Microsoft Corp.',
+                    'GOOGL': 'Alphabet Inc.',
+                    'TSLA': 'Tesla Inc.',
+                    'SPY': 'SPDR S&P 500 ETF',
+                    'QQQ': 'Invesco QQQ ETF',
+                    'IWM': 'iShares Russell 2000 ETF'
+                }
+                
+                if symbol in company_names:
+                    notification_data['company_name'] = company_names[symbol]
+                
+                return notification_data
             
-            return notification_data
+            # Look for legacy signal data (backward compatibility)
+            legacy_signal_data = results.get('signal')
+            if legacy_signal_data:
+                # Build notification data from legacy signal
+                notification_data = {
+                    'symbol': symbol,
+                    'signal': legacy_signal_data.get('action', 'UNKNOWN').upper(),
+                    'price': legacy_signal_data.get('price', 0.0),
+                    'price_change': legacy_signal_data.get('price_change', 0.0),
+                    'price_change_pct': legacy_signal_data.get('price_change_pct', 0.0),
+                    'strategy': legacy_signal_data.get('strategy', 'Unknown Strategy'),
+                    'confidence': legacy_signal_data.get('confidence', 0.0),
+                    'details': legacy_signal_data.get('details', {}),
+                    'timestamp': datetime.now(),
+                    'timeframe': 'legacy',  # Mark as legacy signal
+                    'source_timeframes': ['unknown']
+                }
+                
+                # Add company name if available
+                company_names = {
+                    'AAPL': 'Apple Inc.',
+                    'MSFT': 'Microsoft Corp.',
+                    'GOOGL': 'Alphabet Inc.',
+                    'TSLA': 'Tesla Inc.',
+                    'SPY': 'SPDR S&P 500 ETF',
+                    'QQQ': 'Invesco QQQ ETF',
+                    'IWM': 'iShares Russell 2000 ETF'
+                }
+                
+                if symbol in company_names:
+                    notification_data['company_name'] = company_names[symbol]
+                
+                return notification_data
+            
+            # No signal data found
+            return None
             
         except Exception as e:
             logger.error(f"Error parsing signal event: {e}")
@@ -332,9 +429,16 @@ class NotificationService:
             symbol = signal_data.get('symbol', '')
             confidence = signal_data.get('confidence', 0.0)
             signal_type = signal_data.get('signal', '').upper()
+            timeframe = signal_data.get('timeframe', 'unknown')
             
             # Check symbol filter
             if not self.config.should_notify_symbol(symbol):
+                logger.debug(f"Symbol {symbol} not in notification list")
+                return False
+            
+            # Check timeframe filter (CRITICAL: Only notify for allowed timeframes)
+            if not self.config.should_notify_timeframe(timeframe):
+                logger.debug(f"Timeframe {timeframe} not in notification list - skipping Discord notification")
                 return False
             
             # Check confidence threshold
@@ -342,17 +446,86 @@ class NotificationService:
                 logger.debug(f"Signal confidence {confidence} below threshold {self.config.min_confidence_threshold}")
                 return False
             
-            # Trust the core strategy engine - if it detected a signal change, notify
-            # No artificial time-based filtering for same symbol
+            # Check timeframe filter - this is the key addition
+            if not self._should_notify_timeframes(source_timeframes):
+                logger.debug(f"Signal timeframes {source_timeframes} not in notification list {self.config.timeframes_to_notify}")
+                return False
             
             # Only notify for BUY/SELL signals, not HOLD (unless explicitly configured)
             if signal_type == 'HOLD':
-                return False  # Skip HOLD signals for now
+                logger.debug(f"Skipping HOLD signal for {symbol}")
+                return False
             
+            logger.debug(f"Signal {symbol} {signal_type} passed all filters - will notify")
             return True
             
         except Exception as e:
             logger.error(f"Error checking notification criteria: {e}")
+            return False
+    
+    def _extract_source_timeframes(self, results: Dict[str, Any]) -> List[str]:
+        """
+        Extract source timeframes from calculation results.
+        
+        Args:
+            results: Calculation results dictionary
+            
+        Returns:
+            List of source timeframes
+        """
+        try:
+            timeframes = []
+            
+            # Check timeframe_results for multi-timeframe signals
+            timeframe_results = results.get('timeframe_results', {})
+            if timeframe_results:
+                timeframes.extend(timeframe_results.keys())
+            
+            # Check symbol_config for configured timeframes
+            symbol_config = results.get('symbol_config', {})
+            if symbol_config:
+                config_timeframes = symbol_config.get('timeframes', [])
+                timeframes.extend(config_timeframes)
+            
+            # Remove duplicates and return
+            return list(set(timeframes)) if timeframes else ['unknown']
+            
+        except Exception as e:
+            logger.error(f"Error extracting source timeframes: {e}")
+            return ['unknown']
+    
+    def _should_notify_timeframes(self, source_timeframes: List[str]) -> bool:
+        """
+        Check if any of the source timeframes should trigger notifications.
+        
+        Args:
+            source_timeframes: List of source timeframes
+            
+        Returns:
+            True if any timeframe should trigger notifications
+        """
+        try:
+            # If no source timeframes provided, default to allowing
+            if not source_timeframes or source_timeframes == ['unknown']:
+                logger.debug("No source timeframes provided, allowing notification")
+                return True
+            
+            # Check if any source timeframe is in the notification list
+            for timeframe in source_timeframes:
+                if self.config.should_notify_timeframe(timeframe):
+                    logger.debug(f"Timeframe {timeframe} is in notification list")
+                    return True
+            
+            # Also check for composite signals that include 1d timeframe
+            if 'composite' in source_timeframes and '1d' in source_timeframes:
+                if self.config.should_notify_timeframe('1d'):
+                    logger.debug("Composite signal includes 1d timeframe")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking timeframe notification criteria: {e}")
             return False
     
     async def _monitor_system_status(self):
