@@ -463,6 +463,9 @@ class TestSystemResilience:
                             else:
                                 logger.debug(f"Operation failed after {max_retries} retries: {e}")
                 
+                except Exception as outer_e:
+                    logger.debug(f"Outer operation failed: {outer_e}")
+                
                 # Categorize by phase
                 if i < 20:
                     if operation_succeeded:

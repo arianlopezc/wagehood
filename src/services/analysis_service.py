@@ -400,3 +400,42 @@ class AnalysisService:
         except Exception as e:
             logger.error(f"Error performing performance attribution: {e}")
             raise
+    
+    async def analyze_strategy(self, strategy, market_data):
+        """
+        Analyze a strategy with market data for backward compatibility.
+        
+        Args:
+            strategy: Strategy instance
+            market_data: MarketData instance
+            
+        Returns:
+            Analysis results dictionary
+        """
+        try:
+            logger.info(f"Analyzing strategy {strategy.name} on {market_data.symbol}")
+            
+            # Extract strategy parameters
+            strategy_params = strategy.get_parameters() if hasattr(strategy, 'get_parameters') else {}
+            
+            # Calculate risk metrics
+            risk_metrics = await self.get_risk_metrics(
+                symbol=market_data.symbol,
+                timeframe=market_data.timeframe,
+                strategy=strategy.name,
+                parameters=strategy_params
+            )
+            
+            # Return analysis results
+            return {
+                'strategy_name': strategy.name,
+                'symbol': market_data.symbol,
+                'timeframe': market_data.timeframe.value,
+                'risk_metrics': risk_metrics,
+                'data_points': len(market_data.data),
+                'analysis_timestamp': datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing strategy: {e}")
+            raise
