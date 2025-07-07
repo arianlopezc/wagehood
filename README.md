@@ -87,8 +87,8 @@ The system supports multi-dimensional analysis across:
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ CLI Tools       │◀───│ Data Services   │◀───│ Analysis &      │
-│ (market_*_cli)  │    │ & Storage       │    │ Backtesting     │
+│ Discord         │◀───│ Data Services   │◀───│ Analysis &      │
+│ Notifications   │    │ & Storage       │    │ Backtesting     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -1066,32 +1066,29 @@ STRATEGY_PARAMS = {
 }
 ```
 
-### CLI Configuration
+### Discord Notifications
 
-```yaml
-# ~/.wagehood/cli_config.yaml
-system:
-  timeout: 30
-  retries: 3
-  log_level: "INFO"
-  
-output:
-  format: "table"  # json, table, csv
-  use_color: true
-  max_width: 120
-  
-data:
-  cache_enabled: true
-  cache_ttl: 300
-  
-streaming:
-  buffer_size: 1000
-  reconnect_delay: 5
-  
-logging:
-  level: "INFO"
-  file: "~/.wagehood/cli.log"
+The system includes multi-channel Discord integration for real-time strategy notifications:
+
+```bash
+# Discord Configuration (.env)
+DISCORD_MULTI_CHANNEL_ENABLED=true
+DISCORD_NOTIFICATIONS_ENABLED=true
+DISCORD_NOTIFY_TIMEFRAMES=1d
+
+# Strategy-specific webhook channels
+DISCORD_WEBHOOK_MACD_RSI=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_RSI_TREND=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_SR_BREAKOUT=https://discord.com/api/webhooks/...
 ```
+
+**Features:**
+- Strategy-specific Discord channels
+- 1-day timeframe filtering for swing trading
+- Individual rate limiting per strategy
+- Rich embed formatting with color coding
+- Real-time signal notifications
 
 ## 📈 Performance Characteristics
 
@@ -1099,7 +1096,7 @@ logging:
 
 - **Data Ingestion**: 1-second updates per asset
 - **Calculation Latency**: <100ms per indicator update
-- **CLI Response Time**: <10ms for cached data
+- **API Response Time**: <10ms for cached data
 - **System Throughput**: 1000+ assets simultaneously
 - **Memory Usage**: Optimized with rolling windows and incremental algorithms
 
@@ -1111,11 +1108,11 @@ logging:
 - **Circuit Breakers**: Fault tolerance for external data feeds
 - **Horizontal Scaling**: Add workers for more symbols
 
-### CLI Performance
+### API Performance
 
 - **Target Latency**: <50ms from market to system
 - **Data Queries**: <10ms for cached data, <100ms for fresh data
-- **CLI Commands**: <10ms for local operations
+- **Local Operations**: <10ms for cached operations
 - **Stream Processing**: <10ms through Redis pipeline
 - **Analysis Operations**: <1s for standard backtests
 
@@ -1156,7 +1153,7 @@ pytest tests/integration/ -v
 | Strategies | 90% | ✅ |
 | Backtest Engine | 90% | ✅ |
 | Data Management | 85% | ✅ |
-| CLI Interface | 85% | ✅ |
+| Discord Integration | 95% | ✅ |
 | **Overall** | **90%** | **✅** |
 
 ### Performance Benchmarks
@@ -1164,7 +1161,7 @@ pytest tests/integration/ -v
 - **Indicator Calculations**: <1s for 10K data points
 - **Strategy Signal Generation**: <1s for 5K data points
 - **Backtest Execution**: <5s for 1K data points
-- **CLI Response Time**: <1s for standard commands
+- **API Response Time**: <1s for standard operations
 - **Memory Usage**: <100MB for typical operations
 
 ### Test Data & Scenarios
@@ -1301,7 +1298,7 @@ redis-cli ping
 
 ### System Security
 
-- **Credential Encryption**: CLI credentials encrypted with master password
+- **Credential Encryption**: API credentials encrypted with environment variables
 - **Rate Limiting**: Configurable per-key limits with Redis backend
 - **Input Validation**: All market data validated before processing
 - **Secure Configuration**: Environment-based configuration management
