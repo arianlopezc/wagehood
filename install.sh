@@ -48,7 +48,7 @@ echo "╔═══════════════════════�
 echo "║                                                               ║"
 echo "║               WAGEHOOD TRADING SYSTEM INSTALLER               ║"
 echo "║                                                               ║"
-echo "║         Real-time trading analysis platform                  ║"
+echo "║         Real-time trading analysis platform                   ║"
 echo "║              Worker + CLI Architecture                        ║"
 echo "║                                                               ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
