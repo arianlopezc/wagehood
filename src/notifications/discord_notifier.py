@@ -7,6 +7,7 @@ Sends rich embed messages for trading signals without requiring external depende
 
 import json
 import logging
+import os
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -51,6 +52,11 @@ class DiscordNotifier:
         Returns:
             True if message sent successfully, False otherwise
         """
+        # Prevent real Discord calls during testing
+        if os.getenv('WAGEHOOD_TEST_MODE') == 'true':
+            logger.info("Test mode detected - skipping actual Discord API call")
+            return True
+            
         try:
             # Rate limiting - ensure minimum delay between requests
             current_time = time.time()
@@ -147,13 +153,20 @@ class DiscordNotifier:
             logger.error(f"Unexpected Discord request error: {e}")
             return False
     
-    def send_test_message(self) -> bool:
+    def send_test_message(self, is_test_environment: bool = False) -> bool:
         """
         Send a test message to verify webhook connectivity.
         
+        Args:
+            is_test_environment: If True, prevents actual Discord API calls during testing
+        
         Returns:
-            True if test message sent successfully
+            True if test message sent successfully (or mocked in test environment)
         """
+        if is_test_environment:
+            logger.info("Test environment detected - skipping actual Discord API call")
+            return True
+            
         test_embed = {
             "title": "🧪 Wagehood Test Message",
             "description": "Discord webhook integration test",
