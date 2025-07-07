@@ -138,8 +138,9 @@ class MultiChannelNotificationConfig:
         normalized_name = self._normalize_strategy_name(strategy_name)
         return self.strategy_channels.get(normalized_name)
     
+    @staticmethod
     @lru_cache(maxsize=32)
-    def _normalize_strategy_name(self, strategy_name: str) -> str:
+    def _normalize_strategy_name(strategy_name: str) -> str:
         """
         Normalize strategy name for consistent lookup with caching.
         
