@@ -71,7 +71,7 @@ services:
     
     # Port mapping for Redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     
     # Network configuration
     networks:

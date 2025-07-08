@@ -82,7 +82,12 @@ class CalculationEngine:
         self._redis_client = None
         self._running = False
         self._tasks = []
-        self._executor = ThreadPoolExecutor(max_workers=4)
+        
+        # Get worker count from environment variable
+        import os
+        worker_count = int(os.getenv("CALCULATION_WORKERS", "8"))
+        logger.info(f"Initializing ThreadPoolExecutor with {worker_count} workers")
+        self._executor = ThreadPoolExecutor(max_workers=worker_count)
 
         # Enhanced performance tracking for multi-timeframe processing
         self._stats_lock = threading.Lock()
