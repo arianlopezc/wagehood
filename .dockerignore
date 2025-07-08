@@ -137,12 +137,7 @@ redis.conf
 wagehood_startup.log
 wagehood_production.log
 
-# Test files
-test_*.py
-*_test.py
-*_test_*.py
-*.md
-CLI_*.md
+# Test files (but allow tests/ directory)
 benchmark_*.py
 check_*.py
 comprehensive_*.py
@@ -154,10 +149,14 @@ monitor_*.py
 paper_*.py
 populate_*.py
 reset_*.py
-run_*.py
-strategy_*.py
-test_*.py
 validate_*.py
+
+# But allow important files
+!README.md
+!start_production_service.py
+!docker-entrypoint.sh
+!docker-healthcheck.py
+!run_tests.py
 
 # Management scripts
 status.sh
