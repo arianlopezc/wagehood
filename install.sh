@@ -599,7 +599,7 @@ echo -e "${BLUE}📊 Service Status:${NC}"
 echo "   • Production service: ✅ RUNNING (PID: $WAGEHOOD_PID)"
 echo "   • Redis server: ✅ ACTIVE"
 echo "   • Virtual environment: ✅ READY"
-echo "   • Configured symbols: SPY, QQQ, IWM"
+echo "   • Configured symbols: \${WATCHLIST_SYMBOLS:-SPY,QQQ,IWM}"
 echo "   • Data provider: ✅ ALPACA MARKETS (Live Data)"
 echo "   • Alpaca credentials: ✅ VALIDATED"
 
@@ -635,7 +635,7 @@ echo "   • Systemd integration: sudo cp wagehood.service /etc/systemd/system/"
 
 echo
 echo -e "${GREEN}🎉 Wagehood is now running in production mode!${NC}"
-echo -e "${BLUE}💡 The service is processing SPY, QQQ, and IWM with LIVE Alpaca data.${NC}"
+echo -e "${BLUE}💡 The service is processing \${WATCHLIST_SYMBOLS:-SPY,QQQ,IWM} with LIVE Alpaca data.${NC}"
 echo -e "${BLUE}   Real-time market data is being ingested and analyzed.${NC}"
 
 echo

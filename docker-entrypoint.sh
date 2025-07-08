@@ -245,7 +245,7 @@ show_status() {
     echo -e "${BLUE}📊 Service Status:${NC}"
     echo "   • Redis server: ✅ RUNNING"
     echo "   • Production service: ✅ RUNNING"
-    echo "   • Configured symbols: SPY, QQQ, IWM"
+    echo "   • Configured symbols: ${WATCHLIST_SYMBOLS:-SPY,QQQ,IWM}"
     echo "   • Data provider: ✅ ALPACA MARKETS (Live Data)"
     echo "   • Alpaca credentials: ✅ VALIDATED"
     echo "   • Environment: Docker Container"
