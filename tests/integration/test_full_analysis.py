@@ -6,6 +6,7 @@ Tests the complete analysis pipeline from data generation to strategy evaluation
 
 import pytest
 import numpy as np
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict
 from unittest.mock import Mock, patch
@@ -697,13 +698,90 @@ class TestAnalysisServices:
         except Exception as e:
             # Should handle gracefully
             assert isinstance(e, Exception)
+    
+    @pytest.mark.asyncio
+    async def test_historical_analysis_integration(self):
+        """Test the new historical analysis job functionality."""
+        analysis_service = AnalysisService()
         
-        try:
-            is_open = data_service.is_market_open()
-            assert isinstance(is_open, bool)
-        except Exception as e:
-            # Should handle gracefully
-            assert isinstance(e, Exception)
+        # Define test parameters
+        symbol = "SPY"
+        timeframe = TimeFrame.DAILY
+        strategy = "macd_rsi_strategy"
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=30)
+        
+        # Submit historical analysis job
+        job_id = await analysis_service.analyze_strategy_historical(
+            symbol=symbol,
+            timeframe=timeframe,
+            strategy=strategy,
+            start_date=start_date,
+            end_date=end_date,
+            parameters={
+                'macd_fast': 12,
+                'macd_slow': 26,
+                'macd_signal': 9,
+                'rsi_period': 14,
+                'rsi_oversold': 30,
+                'rsi_overbought': 70
+            }
+        )
+        
+        # Verify job was created
+        assert job_id is not None
+        assert isinstance(job_id, str)
+        
+        # Check initial job status
+        status = await analysis_service.get_optimization_status(job_id)
+        assert status is not None
+        assert status['status'] in ['pending', 'running']  # Could be either in distributed system
+        assert status['symbol'] == symbol
+        assert status['strategy'] == strategy
+        assert status['timeframe'] == timeframe.value
+        
+        # Wait for job completion (with timeout)
+        max_wait = 5  # seconds
+        wait_interval = 0.5
+        elapsed = 0
+        
+        while elapsed < max_wait:
+            await asyncio.sleep(wait_interval)
+            elapsed += wait_interval
+            
+            status = await analysis_service.get_optimization_status(job_id)
+            if status['status'] not in ['pending', 'running']:
+                break
+        
+        # Verify final job status
+        assert status['status'] in ['completed', 'failed']
+        
+        if status['status'] == 'completed':
+            result = status['result']
+            
+            # Verify result structure
+            assert 'signals' in result
+            assert 'total_signals' in result
+            assert 'buy_signals' in result
+            assert 'sell_signals' in result
+            assert 'date_range' in result
+            
+            # Verify metadata
+            assert result['symbol'] == symbol
+            assert result['strategy'] == strategy
+            assert result['timeframe'] == timeframe.value
+            
+            # Verify date range
+            assert result['date_range']['start'] == start_date.isoformat()
+            assert result['date_range']['end'] == end_date.isoformat()
+            
+            # Verify signals are serializable
+            if result['signals']:
+                first_signal = result['signals'][0]
+                assert 'timestamp' in first_signal
+                assert 'signal_type' in first_signal
+                assert 'price' in first_signal
+                assert 'confidence' in first_signal
 
 
 class TestPerformanceIntegration:

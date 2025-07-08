@@ -207,9 +207,18 @@ class CalculationEngine:
 
     async def _consume_market_data_stream(self):
         """Consume market data events from Redis Stream."""
+        import socket
+        import uuid
+        import os
+
         stream_name = "market_data_stream"
         consumer_group = "calculation_workers"
-        consumer_name = f"calc_engine_{int(time.time())}"
+        # Generate unique consumer name to prevent collisions across multiple instances
+        # Combines hostname, process ID, and UUID for guaranteed uniqueness
+        hostname = socket.gethostname()
+        pid = os.getpid()
+        unique_id = uuid.uuid4().hex[:8]
+        consumer_name = f"calc_engine_{hostname}_{pid}_{unique_id}"
 
         logger.info(f"Starting stream consumer: {consumer_name}")
 
