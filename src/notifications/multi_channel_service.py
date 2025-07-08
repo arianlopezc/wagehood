@@ -178,7 +178,7 @@ class MultiChannelNotificationService(NotificationService):
     
     def _should_notify_signal(self, signal_data: Dict[str, Any]) -> bool:
         """
-        Enhanced signal filtering for multi-channel mode.
+        Enhanced signal filtering for multi-channel mode with strategy-specific timeframe support.
         
         Args:
             signal_data: Signal data dictionary
@@ -193,17 +193,14 @@ class MultiChannelNotificationService(NotificationService):
             timeframe = signal_data.get('timeframe', 'unknown')
             strategy = self._extract_strategy_name(signal_data)
             
-            # Check symbol filter (using base config)
+            # Check symbol filter using DISCORD_ALERT_SYMBOLS configuration
+            # For day trading strategies (1h), only alert on symbols in DISCORD_ALERT_SYMBOLS
+            # For swing trading strategies (1d), use existing symbol filtering logic
             if hasattr(self, 'config') and self.config and not self.config.should_notify_symbol(symbol):
-                logger.debug(f"Symbol {symbol} not in notification list")
+                logger.debug(f"Symbol {symbol} not in Discord alert list (DISCORD_ALERT_SYMBOLS)")
                 return False
             
-            # Check timeframe filter (CRITICAL: Only notify for allowed timeframes)
-            if hasattr(self, 'config') and self.config and not self.config.should_notify_timeframe(timeframe):
-                logger.debug(f"Timeframe {timeframe} not in notification list - skipping Discord notification")
-                return False
-            
-            # Skip Moving Average Crossover (not recommended for swing trading)
+            # Skip Moving Average Crossover (not recommended for trading notifications)
             if strategy is None:
                 # This includes MA Crossover and other unidentified strategies
                 logger.debug(f"Strategy not configured for notifications: {signal_data.get('strategy', 'unknown')}")
@@ -214,13 +211,29 @@ class MultiChannelNotificationService(NotificationService):
                 logger.debug(f"No channel configured for strategy: {strategy}")
                 return False
             
-            # In multi-channel mode, we trust the core signal logic (no confidence filtering)
-            # Each strategy channel can have its own rate limiting
+            # Get strategy configuration for timeframe validation
+            strategy_config = self.multi_config.get_strategy_config(strategy)
+            if not strategy_config:
+                logger.debug(f"Strategy configuration not found: {strategy}")
+                return False
+            
+            # Check if strategy supports this timeframe (strategy-specific timeframe filtering)
+            if not strategy_config.supports_timeframe(timeframe):
+                logger.debug(f"Strategy {strategy} does not support timeframe {timeframe}. Allowed: {strategy_config.allowed_timeframes}")
+                return False
+            
+            # Global timeframe filter (must be in allowed Discord timeframes)
+            if hasattr(self, 'config') and self.config and not self.config.should_notify_timeframe(timeframe):
+                logger.debug(f"Timeframe {timeframe} not in global Discord notification list - skipping")
+                return False
             
             # Only notify for BUY/SELL signals, not HOLD
             if signal_type == 'HOLD':
+                logger.debug(f"Skipping HOLD signal for {symbol}")
                 return False
             
+            # Log successful filtering for debugging
+            logger.debug(f"Signal passed all filters: {symbol} {strategy} {timeframe} {signal_type}")
             return True
             
         except Exception as e:
@@ -241,13 +254,23 @@ class MultiChannelNotificationService(NotificationService):
             for strategy_key in enabled_strategies:
                 strategy_config = self.multi_config.strategy_channels[strategy_key]
                 
+                # Determine display profile and timeframes
+                timeframes_display = ", ".join(strategy_config.allowed_timeframes)
+                profile_display = "Day Trading" if strategy_config.trading_profile == "day_trading" else "Swing Trading"
+                profile_emoji = "⚡" if strategy_config.trading_profile == "day_trading" else "📈"
+                
+                # Get alert symbols from configuration
+                alert_symbols = "All watchlist symbols"
+                if hasattr(self, 'config') and self.config and self.config.symbols_to_notify:
+                    alert_symbols = ", ".join(self.config.symbols_to_notify)
+                
                 status_data = {
                     'service': f'Discord Notifications - {strategy_config.strategy_name}',
                     'status': 'running',
                     'strategy': strategy_config.strategy_name,
-                    'timeframe': '1d (swing trading)',
+                    'timeframe': f'{timeframes_display} ({strategy_config.trading_profile})',
                     'rate_limit': f"{strategy_config.max_notifications_per_hour}/hour",
-                    'message': f'Monitoring {strategy_config.strategy_name} swing trading signals'
+                    'message': f'Monitoring {strategy_config.strategy_name} {strategy_config.trading_profile.replace("_", " ")} signals'
                 }
                 
                 # Create startup embed
@@ -256,13 +279,13 @@ class MultiChannelNotificationService(NotificationService):
                     "color": strategy_config.channel_color,
                     "fields": [
                         {"name": "📊 Strategy", "value": strategy_config.strategy_name, "inline": True},
-                        {"name": "⏰ Timeframe", "value": "1d (Daily)", "inline": True},
-                        {"name": "📈 Profile", "value": "Swing Trading", "inline": True},
+                        {"name": "⏰ Timeframes", "value": timeframes_display, "inline": True},
+                        {"name": f"{profile_emoji} Profile", "value": profile_display, "inline": True},
                         {"name": "🎯 Rate Limit", "value": f"{strategy_config.max_notifications_per_hour}/hour", "inline": True},
                         {"name": "💾 Data Source", "value": "Alpaca Markets", "inline": True},
-                        {"name": "✅ Status", "value": "Active & Monitoring", "inline": True}
+                        {"name": "🔔 Alert Symbols", "value": alert_symbols, "inline": True}
                     ],
-                    "footer": {"text": f"Wagehood • {strategy_config.strategy_name} Channel"},
+                    "footer": {"text": f"Wagehood • {strategy_config.strategy_name} Channel • {profile_display}"},
                     "timestamp": datetime.now().isoformat()
                 }
                 
