@@ -248,8 +248,10 @@ class DataService:
             from src.core.constants import SUPPORTED_SYMBOLS
             return list(SUPPORTED_SYMBOLS)
         except ImportError:
-            # Fallback to common symbols
-            return ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'SPY', 'QQQ']
+            # Fallback to environment-configurable symbols
+            import os
+            default_symbols_str = os.environ.get('DEFAULT_SYMBOLS', 'SPY,QQQ,IWM')
+            return [s.strip() for s in default_symbols_str.split(',') if s.strip()]
     
     def is_market_open(self) -> bool:
         """Check if market is currently open (simplified for testing)."""

@@ -305,10 +305,13 @@ class AlpacaIngestionService:
                 if asset_config.enabled:
                     symbols.append(asset_config.symbol)
             
-            # If no configured symbols, use a default set
+            # If no configured symbols, get from environment or use SPY as minimal default
             if not symbols:
-                symbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'SPY']
-                logger.info(f"Using default symbols: {symbols}")
+                import os
+                default_symbols_str = os.environ.get('DEFAULT_SYMBOLS', 'SPY')
+                symbols = [s.strip() for s in default_symbols_str.split(',') if s.strip()]
+                logger.warning(f"No symbols configured in watchlist, using environment default: {symbols}")
+                logger.warning("Configure symbols using WATCHLIST_SYMBOLS environment variable")
             
             return symbols
             
