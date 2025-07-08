@@ -98,10 +98,13 @@ class MinimalAlpacaProvider:
             from alpaca.data.requests import StockBarsRequest
             from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame
             from datetime import timedelta
+            import pytz
 
-            # Test with a simple stock request
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=2)
+            # Test with a simple stock request - use older data for IEX feed
+            # IEX data has delays, so use data from at least 15 minutes ago
+            utc = pytz.UTC
+            end_date = datetime.now(utc) - timedelta(days=2)  # 2 days old for IEX
+            start_date = end_date - timedelta(days=5)  # 5 days of data
 
             request = StockBarsRequest(
                 symbol_or_symbols=["AAPL"],

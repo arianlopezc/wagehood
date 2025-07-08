@@ -8,8 +8,13 @@ services:
     # Environment variables
     environment:
       - WAGEHOOD_ENV=production
-      - REDIS_HOST=localhost
-      - REDIS_PORT=6379
+      - REDIS_HOST=${REDIS_HOST:-localhost}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_STREAMS_MAXLEN=${REDIS_STREAMS_MAXLEN:-10000}
+      - REDIS_STORE_SYMBOL_VALUES=${REDIS_STORE_SYMBOL_VALUES:-true}
+      - REDIS_SYMBOL_HISTORY_TTL=${REDIS_SYMBOL_HISTORY_TTL:-86400}
+      - REDIS_SYMBOL_HISTORY_MAX_SIZE=${REDIS_SYMBOL_HISTORY_MAX_SIZE:-1000}
       
       # MANDATORY: Alpaca credentials (set via .env file or docker run -e)
       - ALPACA_API_KEY=${ALPACA_API_KEY:?ALPACA_API_KEY environment variable is required}
@@ -18,13 +23,32 @@ services:
       # Optional: Alpaca configuration
       - ALPACA_PAPER_TRADING=${ALPACA_PAPER_TRADING:-true}
       - ALPACA_DATA_FEED=${ALPACA_DATA_FEED:-iex}
+      - ALPACA_MAX_RETRIES=${ALPACA_MAX_RETRIES:-3}
+      - ALPACA_RETRY_DELAY=${ALPACA_RETRY_DELAY:-1.0}
+      
+      # Watchlist Configuration
+      - WATCHLIST_SYMBOLS=${WATCHLIST_SYMBOLS:-AAPL,MSFT,GOOGL,TSLA,SPY,QQQ,IWM}
+      
+      # System Configuration
+      - DATA_PROVIDER=${DATA_PROVIDER:-alpaca}
+      - DATA_UPDATE_INTERVAL=${DATA_UPDATE_INTERVAL:-1}
+      - CALCULATION_WORKERS=${CALCULATION_WORKERS:-8}
+      - MAX_CONCURRENT_CALCULATIONS=${MAX_CONCURRENT_CALCULATIONS:-100}
+      - BATCH_CALCULATION_SIZE=${BATCH_CALCULATION_SIZE:-10}
+      - MAX_EVENTS_PER_SECOND=${MAX_EVENTS_PER_SECOND:-1000}
+      
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-%(asctime)s - %(name)s - %(levelname)s - %(message)s}
       
       # Discord Notification Configuration
       - DISCORD_NOTIFICATIONS_ENABLED=${DISCORD_NOTIFICATIONS_ENABLED:-false}
       - DISCORD_MULTI_CHANNEL_ENABLED=${DISCORD_MULTI_CHANNEL_ENABLED:-false}
       - DISCORD_NOTIFY_TIMEFRAMES=${DISCORD_NOTIFY_TIMEFRAMES:-1d}
-      - DISCORD_ALERT_SYMBOLS=${DISCORD_ALERT_SYMBOLS:-}
+      - DISCORD_ALERT_SYMBOLS=${DISCORD_ALERT_SYMBOLS:-TSLA,IWM}
       - DISCORD_STRATEGY_TIMEFRAME_MAPPING=${DISCORD_STRATEGY_TIMEFRAME_MAPPING:-}
+      - DISCORD_SWING_TRADING_STRATEGIES=${DISCORD_SWING_TRADING_STRATEGIES:-}
+      - DISCORD_DAY_TRADING_STRATEGIES=${DISCORD_DAY_TRADING_STRATEGIES:-}
       
       # Strategy-Specific Discord Webhooks
       - DISCORD_WEBHOOK_SWING_SIGNALS=${DISCORD_WEBHOOK_SWING_SIGNALS:-}
@@ -45,9 +69,13 @@ services:
       - DISCORD_ENABLED_BOLLINGER_BREAKOUT=${DISCORD_ENABLED_BOLLINGER_BREAKOUT:-true}
       - DISCORD_ENABLED_SR_BREAKOUT=${DISCORD_ENABLED_SR_BREAKOUT:-true}
     
-    # Port mapping
+    # Port mapping for Redis
     ports:
-      - "6379:6379"  # Redis port
+      - "6379:6379"
+    
+    # Network configuration
+    networks:
+      - wagehood-network
     
     # Volume mounts for data persistence
     volumes:
@@ -112,8 +140,8 @@ volumes:
   # redis-insight-data:
   #   driver: local
 
-# Networks (optional)
+# Networks
 networks:
-  default:
+  wagehood-network:
     name: wagehood-network
     driver: bridge

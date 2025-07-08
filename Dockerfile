@@ -27,12 +27,10 @@ COPY README.md .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-COPY tests/ ./tests/
+# Copy entire source code (ensure all files are included)
+COPY . .
 
-# Install the package
+# Install the package in development mode
 RUN pip install -e .
 
 # Production stage
@@ -68,8 +66,8 @@ COPY --from=builder /app ./
 COPY start_production_service.py ./
 COPY wagehood.service ./
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/data && \
+# Create necessary directories and set permissions
+RUN mkdir -p /app/logs /app/data /app/conf && \
     chown -R wagehood:wagehood /app
 
 # Copy Docker-specific entrypoint and health check
@@ -77,15 +75,16 @@ COPY docker-entrypoint.sh ./
 COPY docker-healthcheck.py ./
 RUN chmod +x docker-entrypoint.sh docker-healthcheck.py
 
-# Create Redis configuration for container
-RUN echo "# Redis configuration for Wagehood container" > /etc/redis/redis.conf && \
-    echo "port 6379" >> /etc/redis/redis.conf && \
-    echo "bind 0.0.0.0" >> /etc/redis/redis.conf && \
-    echo "save 60 100" >> /etc/redis/redis.conf && \
-    echo "maxmemory 256mb" >> /etc/redis/redis.conf && \
-    echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf && \
-    echo "appendonly yes" >> /etc/redis/redis.conf && \
-    echo "dir /app/data" >> /etc/redis/redis.conf
+# Create Redis configuration for container (in app directory)
+RUN mkdir -p /app/conf && \
+    echo "# Redis configuration for Wagehood container" > /app/conf/redis.conf && \
+    echo "port 6379" >> /app/conf/redis.conf && \
+    echo "bind 0.0.0.0" >> /app/conf/redis.conf && \
+    echo "save 60 100" >> /app/conf/redis.conf && \
+    echo "maxmemory 256mb" >> /app/conf/redis.conf && \
+    echo "maxmemory-policy allkeys-lru" >> /app/conf/redis.conf && \
+    echo "appendonly yes" >> /app/conf/redis.conf && \
+    echo "dir /app/data" >> /app/conf/redis.conf
 
 # Comprehensive health check with Alpaca connectivity validation
 HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \
@@ -98,7 +97,7 @@ USER wagehood
 EXPOSE 6379
 
 # Environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/src
 ENV REDIS_HOST=localhost
 ENV REDIS_PORT=6379
 ENV WAGEHOOD_ENV=production
