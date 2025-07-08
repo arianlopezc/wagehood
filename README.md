@@ -298,7 +298,32 @@ for name, strategy_class in STRATEGY_REGISTRY.items():
 
 ## 🖥️ Python API Interface
 
-The Wagehood system provides a Python API for multi-strategy multi-timeframe analysis. The system has moved away from CLI tools to a programmatic interface.
+The Wagehood system provides a Python API for multi-strategy multi-timeframe analysis and a Job Submission CLI for backtesting against the running production instance.
+
+## 📋 Job Submission CLI
+
+Submit backtest jobs to the running production instance and get detailed results with all signals and trades.
+
+```bash
+# Submit a backtest job
+python submit_job.py --symbol AAPL --timeframe 1h --strategy macd_rsi \
+                    --start 2024-01-01 --end 2024-12-31
+
+# Output includes:
+# - Real-time progress monitoring
+# - Complete performance metrics  
+# - All trading signals generated
+# - All trades with entry/exit details
+# - Profit/loss analysis
+```
+
+**Key Features:**
+- **Single Command**: Submit, monitor, and view results in one command
+- **Real-time Progress**: Live progress updates with visual progress bar
+- **Comprehensive Results**: All signals, trades, and performance metrics
+- **Production Integration**: Uses running Docker instance for analysis
+
+See [Job Submission CLI Documentation](docs/JOB_SUBMISSION_CLI.md) for complete usage guide.
 
 ### Core Python API
 

@@ -12,6 +12,7 @@ from datetime import datetime
 from src.realtime.data_ingestion import create_ingestion_service
 from src.realtime.config_manager import ConfigManager
 from src.realtime.calculation_engine import CalculationEngine
+from src.jobs.job_processor import JobProcessor
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +33,7 @@ class ProductionService:
         self.config = None
         self.ingestion_service = None
         self.calc_engine = None
+        self.job_processor = None
         self.running = False
         
     async def initialize(self):
@@ -50,6 +52,10 @@ class ProductionService:
             # Create calculation engine
             self.calc_engine = CalculationEngine(self.config, self.ingestion_service)
             logger.info("✅ Calculation engine initialized")
+            
+            # Create job processor
+            self.job_processor = JobProcessor()
+            logger.info("✅ Job processor initialized")
             
             # Log configuration
             enabled_symbols = self.config.get_enabled_symbols()
@@ -70,6 +76,10 @@ class ProductionService:
             self.running = True
             logger.info("🚀 Starting real-time processing...")
             
+            # Start job processor
+            job_task = asyncio.create_task(self.job_processor.start())
+            logger.info("✅ Job processor started")
+            
             # Start the main ingestion service
             await self.ingestion_service.start()
             
@@ -89,6 +99,10 @@ class ProductionService:
             logger.info("🛑 Stopping production service...")
             self.running = False
             
+            if self.job_processor:
+                await self.job_processor.stop()
+                logger.info("✅ Job processor stopped")
+                
             if self.ingestion_service:
                 await self.ingestion_service.stop()
                 logger.info("✅ Ingestion service stopped")

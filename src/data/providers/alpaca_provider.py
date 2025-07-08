@@ -20,6 +20,7 @@ try:
         CryptoBarsRequest, CryptoQuoteRequest, CryptoTradesRequest
     )
     from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
+    from alpaca.data.enums import DataFeed, CryptoFeed
     from alpaca.common.exceptions import APIError
     ALPACA_AVAILABLE = True
 except ImportError:
@@ -76,8 +77,23 @@ class AlpacaProvider(DataProvider):
         self.api_key = self.config.get('api_key') or os.getenv('ALPACA_API_KEY')
         self.secret_key = self.config.get('secret_key') or os.getenv('ALPACA_SECRET_KEY')
         self.paper = self.config.get('paper', True)
-        self.feed = self.config.get('feed', 'iex')  # 'iex' or 'sip'
-        self.crypto_feed = self.config.get('crypto_feed', 'us')
+        
+        # Convert string feed to enum
+        feed_str = self.config.get('feed', 'iex')
+        if feed_str == 'iex':
+            self.feed = DataFeed.IEX
+        elif feed_str == 'sip':
+            self.feed = DataFeed.SIP
+        else:
+            self.feed = DataFeed.IEX  # Default to IEX
+            
+        # Convert string crypto feed to enum
+        crypto_feed_str = self.config.get('crypto_feed', 'us')
+        if crypto_feed_str == 'us':
+            self.crypto_feed = CryptoFeed.US
+        else:
+            self.crypto_feed = CryptoFeed.US  # Default to US
+            
         self.max_retries = self.config.get('max_retries', 3)
         self.retry_delay = self.config.get('retry_delay', 1.0)
         
@@ -182,7 +198,7 @@ class AlpacaProvider(DataProvider):
             # Test with a simple crypto data request (no auth required)
             request = CryptoBarsRequest(
                 symbol_or_symbols=["BTC/USD"],
-                timeframe=AlpacaTimeFrame.Day,
+                timeframe=AlpacaTimeFrame(1, TimeFrameUnit.Day),
                 start=datetime.now() - timedelta(days=2),
                 end=datetime.now() - timedelta(days=1)
             )
@@ -207,15 +223,15 @@ class AlpacaProvider(DataProvider):
             Alpaca TimeFrame object
         """
         mapping = {
-            TimeFrame.MINUTE_1: AlpacaTimeFrame.Minute,
+            TimeFrame.MINUTE_1: AlpacaTimeFrame(1, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_5: AlpacaTimeFrame(5, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_15: AlpacaTimeFrame(15, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_30: AlpacaTimeFrame(30, TimeFrameUnit.Minute),
-            TimeFrame.HOUR_1: AlpacaTimeFrame.Hour,
+            TimeFrame.HOUR_1: AlpacaTimeFrame(1, TimeFrameUnit.Hour),
             TimeFrame.HOUR_4: AlpacaTimeFrame(4, TimeFrameUnit.Hour),
-            TimeFrame.DAILY: AlpacaTimeFrame.Day,
-            TimeFrame.WEEKLY: AlpacaTimeFrame.Week,
-            TimeFrame.MONTHLY: AlpacaTimeFrame.Month,
+            TimeFrame.DAILY: AlpacaTimeFrame(1, TimeFrameUnit.Day),
+            TimeFrame.WEEKLY: AlpacaTimeFrame(1, TimeFrameUnit.Week),
+            TimeFrame.MONTHLY: AlpacaTimeFrame(1, TimeFrameUnit.Month),
         }
         
         if timeframe not in mapping:

@@ -17,6 +17,7 @@ from .distributed import (
     DeadWorkerDetector
 )
 from .models import JobStatus, JobType, JobMetadata, JobResult
+from .job_processor import JobProcessor
 
 __all__ = [
     "DistributedJobManager",
@@ -28,5 +29,6 @@ __all__ = [
     "JobStatus",
     "JobType", 
     "JobMetadata",
-    "JobResult"
+    "JobResult",
+    "JobProcessor"
 ]
