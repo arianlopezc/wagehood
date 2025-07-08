@@ -1066,39 +1066,111 @@ STRATEGY_PARAMS = {
 }
 ```
 
-### Discord Notifications
+## 🎯 Discord Multi-Channel Integration
 
-The system includes multi-channel Discord integration for real-time strategy notifications:
+The system features advanced multi-channel Discord integration with strategy-specific routing, trading profile support, and sophisticated rate limiting.
+
+### Key Features
+
+- **Strategy-Specific Channels**: Each trading strategy can route notifications to dedicated Discord channels
+- **Trading Profile Integration**: Day trading vs swing trading timeframe filtering
+- **Individual Rate Limiting**: Customizable notification limits per strategy
+- **Alert Symbol Configuration**: Separate watchlist for notifications
+- **Strategy-Timeframe Mapping**: Automated routing based on timeframe and strategy combinations
+- **Rich Embed Formatting**: Color-coded messages with comprehensive signal information
+
+### Trading Profile Configuration
+
+**Day Trading Profile:**
+- **Timeframes:** 1h notifications for rapid signal delivery
+- **Strategies:** RSI Trend Following, Bollinger Band Breakout
+- **Rate Limits:** Higher frequency (12-15 notifications/hour)
+- **Use Case:** Active intraday monitoring and quick entry/exit signals
+
+**Swing Trading Profile:**
+- **Timeframes:** 1d notifications for position trades
+- **Strategies:** MACD+RSI Combined, Support/Resistance Breakout
+- **Rate Limits:** Lower frequency (6-8 notifications/hour)
+- **Use Case:** Multi-day position signals with longer holding periods
+
+### Discord Configuration
 
 ```bash
-# Discord Configuration (.env)
-DISCORD_MULTI_CHANNEL_ENABLED=true
+# Core Discord Settings (.env)
 DISCORD_NOTIFICATIONS_ENABLED=true
-DISCORD_NOTIFY_TIMEFRAMES=1d
+DISCORD_MULTI_CHANNEL_ENABLED=true
+DISCORD_NOTIFY_TIMEFRAMES=1h,1d
 
-# Strategy-specific webhook channels
-DISCORD_WEBHOOK_MACD_RSI=https://discord.com/api/webhooks/...
-DISCORD_WEBHOOK_RSI_TREND=https://discord.com/api/webhooks/...
-DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=https://discord.com/api/webhooks/...
-DISCORD_WEBHOOK_SR_BREAKOUT=https://discord.com/api/webhooks/...
+# Alert Symbol List (separate from main watchlist)
+DISCORD_ALERT_SYMBOLS=AAPL,MSFT,GOOGL,TSLA,SPY
+
+# Strategy-Timeframe Mapping
+DISCORD_STRATEGY_TIMEFRAME_MAPPING=macd_rsi:1d,sr_breakout:1d,rsi_trend:1h,bollinger_breakout:1h
+
+# Strategy-Specific Webhook URLs
+DISCORD_WEBHOOK_MACD_RSI=https://discord.com/api/webhooks/your_macd_rsi_webhook
+DISCORD_WEBHOOK_RSI_TREND=https://discord.com/api/webhooks/your_rsi_trend_webhook
+DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=https://discord.com/api/webhooks/your_bollinger_webhook
+DISCORD_WEBHOOK_SR_BREAKOUT=https://discord.com/api/webhooks/your_sr_breakout_webhook
+
+# Individual Rate Limits (notifications per hour)
+DISCORD_RATE_LIMIT_MACD_RSI=8      # Swing trading
+DISCORD_RATE_LIMIT_SR_BREAKOUT=6   # Swing trading
+DISCORD_RATE_LIMIT_RSI_TREND=12    # Day trading
+DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT=15  # Day trading
+
+# Strategy Enable/Disable
+DISCORD_ENABLED_MACD_RSI=true
+DISCORD_ENABLED_RSI_TREND=true
+DISCORD_ENABLED_BOLLINGER_BREAKOUT=true
+DISCORD_ENABLED_SR_BREAKOUT=true
 ```
 
-**Features:**
-- Strategy-specific Discord channels
-- 1-day timeframe filtering for swing trading
-- Individual rate limiting per strategy
-- Rich embed formatting with color coding
-- Real-time signal notifications
+### Multi-Channel Benefits
+
+1. **Organized Signal Flow**: Each strategy sends notifications to dedicated channels
+2. **Profile-Based Filtering**: Day traders get 1h signals, swing traders get 1d signals
+3. **Rate Limit Management**: Prevents notification spam with strategy-specific limits
+4. **Selective Symbol Monitoring**: Configure separate symbol lists for notifications
+5. **Backward Compatibility**: Fallback to single-channel mode when multi-channel is disabled
 
 ## 📈 Performance Characteristics
+
+### Current System Capacity
+
+**Recommended Production Limits:**
+- **Symbols**: Up to 20 symbols safely for real-time processing
+- **Timeframes**: 6 concurrent timeframes per symbol
+- **Strategies**: All 5 strategies simultaneously
+- **Memory Usage**: ~512MB for typical production workload
+- **CPU Usage**: 1-2 cores for optimal performance
 
 ### Performance Targets
 
 - **Data Ingestion**: 1-second updates per asset
 - **Calculation Latency**: <100ms per indicator update
 - **API Response Time**: <10ms for cached data
-- **System Throughput**: 1000+ assets simultaneously
-- **Memory Usage**: Optimized with rolling windows and incremental algorithms
+- **Notification Delivery**: <5 seconds from signal to Discord
+- **System Throughput**: 20 symbols with 6 timeframes each
+
+### Scaling Guidelines
+
+**For 20+ Symbols:**
+- Increase CPU allocation to 2+ cores
+- Allocate 1GB+ memory
+- Consider separate Redis instance
+- Monitor disk I/O for logging
+
+**For High-Frequency Trading:**
+- Reduce timeframes to 1m, 5m only
+- Increase Redis memory allocation
+- Use SSD storage for faster data access
+- Consider horizontal scaling with multiple instances
+
+**Resource Requirements:**
+- **Minimum**: 1 CPU core, 512MB RAM, Redis server
+- **Recommended**: 2 CPU cores, 1GB RAM, dedicated Redis instance
+- **High Scale**: 4+ CPU cores, 2GB+ RAM, Redis cluster
 
 ### Real-Time Processing
 
@@ -1182,45 +1254,114 @@ pytest tests/integration/ -v
 
 ## 🚀 Production Deployment
 
-### Docker Deployment
+### Production Docker Configuration
+
+The system includes a production-ready Docker setup with security best practices, health checks, and Alpaca credential validation.
+
+**Multi-Stage Dockerfile Features:**
+- Security-optimized build with non-root user
+- Integrated Redis server for standalone operation
+- Comprehensive health checks with Alpaca connectivity validation
+- Proper signal handling for graceful shutdown
+- Production logging and monitoring
 
 ```dockerfile
+# Multi-stage production build
+FROM python:3.9-slim as builder
+RUN groupadd -r builduser && useradd -r -g builduser builduser
+
+# Install dependencies with security updates
+RUN apt-get update && apt-get install -y build-essential gcc g++ \
+    && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+# Production stage
 FROM python:3.9-slim
+RUN apt-get update && apt-get install -y redis-server curl \
+    && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Create secure app user
+RUN groupadd -r wagehood && useradd -r -g wagehood wagehood
 
-COPY src/ src/
-COPY scripts/ scripts/
-RUN pip install -e .
+# Configure Redis for container
+RUN echo "maxmemory 256mb" >> /etc/redis/redis.conf \
+    && echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
 
-CMD ["python", "-c", "from src.realtime.data_ingestion import create_ingestion_service; import asyncio; service = create_ingestion_service(); asyncio.run(service.start())"]
+# Health check with Alpaca validation
+HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \
+    CMD python docker-healthcheck.py || exit 1
+
+USER wagehood
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["production"]
 ```
 
-### Docker Compose
+### Production Docker Compose
+
+Complete production deployment with environment variable validation, resource limits, and comprehensive monitoring.
 
 ```yaml
-version: '3.8'
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    
-  wagehood-realtime:
+  wagehood:
     build: .
-    command: python -c "from src.realtime.data_ingestion import create_ingestion_service; import asyncio; service = create_ingestion_service(); asyncio.run(service.start())"
+    image: wagehood:latest
+    container_name: wagehood-trading
+    restart: unless-stopped
+    
+    # MANDATORY: Alpaca credentials validation
     environment:
-      - REDIS_HOST=redis
-      - CALCULATION_WORKERS=4
-    depends_on:
-      - redis
+      - ALPACA_API_KEY=${ALPACA_API_KEY:?ALPACA_API_KEY environment variable is required}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:?ALPACA_SECRET_KEY environment variable is required}
+      - ALPACA_PAPER_TRADING=${ALPACA_PAPER_TRADING:-true}
+      - ALPACA_DATA_FEED=${ALPACA_DATA_FEED:-iex}
+      
+      # Discord Multi-Channel Configuration
+      - DISCORD_NOTIFICATIONS_ENABLED=${DISCORD_NOTIFICATIONS_ENABLED:-false}
+      - DISCORD_MULTI_CHANNEL_ENABLED=${DISCORD_MULTI_CHANNEL_ENABLED:-false}
+      - DISCORD_NOTIFY_TIMEFRAMES=${DISCORD_NOTIFY_TIMEFRAMES:-1d}
+      - DISCORD_ALERT_SYMBOLS=${DISCORD_ALERT_SYMBOLS:-}
+      - DISCORD_STRATEGY_TIMEFRAME_MAPPING=${DISCORD_STRATEGY_TIMEFRAME_MAPPING:-}
+      
+      # Strategy-Specific Webhooks
+      - DISCORD_WEBHOOK_MACD_RSI=${DISCORD_WEBHOOK_MACD_RSI:-}
+      - DISCORD_WEBHOOK_RSI_TREND=${DISCORD_WEBHOOK_RSI_TREND:-}
+      - DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=${DISCORD_WEBHOOK_BOLLINGER_BREAKOUT:-}
+      - DISCORD_WEBHOOK_SR_BREAKOUT=${DISCORD_WEBHOOK_SR_BREAKOUT:-}
+      
+      # Individual Rate Limits
+      - DISCORD_RATE_LIMIT_MACD_RSI=${DISCORD_RATE_LIMIT_MACD_RSI:-8}
+      - DISCORD_RATE_LIMIT_RSI_TREND=${DISCORD_RATE_LIMIT_RSI_TREND:-12}
+      - DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT=${DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT:-15}
+      - DISCORD_RATE_LIMIT_SR_BREAKOUT=${DISCORD_RATE_LIMIT_SR_BREAKOUT:-6}
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Comprehensive health check
+    healthcheck:
+      test: ["CMD", "python", "docker-healthcheck.py"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    
+    # Data persistence
+    volumes:
+      - wagehood-data:/app/data
+      - wagehood-logs:/app/logs
+    
+    ports:
+      - "6379:6379"  # Redis port
 
 volumes:
-  redis_data:
+  wagehood-data:
+  wagehood-logs:
 ```
 
 ### Kubernetes Deployment
@@ -1259,25 +1400,79 @@ spec:
             cpu: "500m"
 ```
 
-### Health Checks
+### Production Health Checks
+
+Comprehensive health monitoring with Alpaca connectivity validation and system status verification.
 
 ```bash
-# System health check
-python -c "from src.core.models import OHLCV; from src.strategies import create_strategy; print('System operational')"
+# Docker health check (runs automatically)
+docker exec wagehood-trading python docker-healthcheck.py
 
-# Test strategy execution
-python -c "
+# Manual system verification
+docker exec wagehood-trading python -c "
 from src.strategies import create_strategy
 from src.data.mock_generator import MockDataGenerator
+from src.realtime.data_ingestion import MinimalAlpacaProvider
+import asyncio
+import os
+
+# Test core system
 strategy = create_strategy('macd_rsi')
 generator = MockDataGenerator()
 data = generator.generate_realistic_data('SPY', periods=10)
 signals = strategy.generate_signals(data)
-print(f'Generated {len(signals)} signals - System healthy')
+print(f'✅ Strategy system: Generated {len(signals)} signals')
+
+# Test Alpaca connectivity
+async def test_alpaca():
+    config = {
+        'api_key': os.getenv('ALPACA_API_KEY'),
+        'secret_key': os.getenv('ALPACA_SECRET_KEY'),
+        'paper': True,
+        'feed': 'iex'
+    }
+    provider = MinimalAlpacaProvider(config)
+    await provider.connect()
+    print('✅ Alpaca connectivity validated')
+
+asyncio.run(test_alpaca())
 "
 
-# System ping test
-redis-cli ping
+# Check container resource usage
+docker stats wagehood-trading --no-stream
+
+# View real-time logs
+docker logs -f wagehood-trading
+
+# Redis connectivity test
+docker exec wagehood-trading redis-cli ping
+```
+
+### Environment Variable Reference
+
+**Required Variables:**
+```bash
+# MANDATORY: Alpaca Markets credentials
+ALPACA_API_KEY=your_paper_api_key_here
+ALPACA_SECRET_KEY=your_paper_secret_key_here
+```
+
+**Optional Configuration:**
+```bash
+# Alpaca Settings
+ALPACA_PAPER_TRADING=true                    # Use paper trading
+ALPACA_DATA_FEED=iex                         # Free IEX data feed
+
+# System Performance
+CALCULATION_WORKERS=4                        # Worker processes
+MAX_CONCURRENT_CALCULATIONS=100              # Calculation limit
+REDIS_STREAMS_MAXLEN=10000                   # Stream retention
+
+# Discord Multi-Channel (All optional)
+DISCORD_NOTIFICATIONS_ENABLED=false         # Enable notifications
+DISCORD_MULTI_CHANNEL_ENABLED=false         # Multi-channel mode
+DISCORD_ALERT_SYMBOLS=AAPL,MSFT,GOOGL       # Notification symbols
+DISCORD_WEBHOOK_MACD_RSI=https://...         # Strategy webhooks
 ```
 
 ### Monitoring & Observability
@@ -1408,6 +1603,84 @@ print(f'Current process memory: {memory_mb:.1f} MB')
 "
 ```
 
+#### Discord Notifications Not Working
+```bash
+# Test Discord webhook connectivity
+curl -X POST "https://discord.com/api/webhooks/your_webhook_id/your_webhook_token" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Test message from Wagehood"}'
+
+# Check Discord configuration
+python -c "
+import os
+print('Discord Config Status:')
+print(f'  Notifications enabled: {os.getenv(\"DISCORD_NOTIFICATIONS_ENABLED\", \"false\")}')
+print(f'  Multi-channel enabled: {os.getenv(\"DISCORD_MULTI_CHANNEL_ENABLED\", \"false\")}')
+print(f'  Alert symbols: {os.getenv(\"DISCORD_ALERT_SYMBOLS\", \"not set\")}')
+print(f'  Timeframes: {os.getenv(\"DISCORD_NOTIFY_TIMEFRAMES\", \"not set\")}')
+"
+
+# Test multi-channel notification service
+docker exec wagehood-trading python -c "
+from src.notifications.multi_channel_service import MultiChannelNotificationService
+from src.notifications.multi_channel_config import MultiChannelNotificationConfig
+
+config = MultiChannelNotificationConfig.from_environment()
+print(f'Multi-channel config: enabled={config.enabled}, channels={len(config.strategy_channels)}')
+"
+```
+
+#### Production Container Issues
+```bash
+# Check container status and logs
+docker ps -a | grep wagehood
+docker logs wagehood-trading --tail 50
+
+# Test Alpaca credentials in container
+docker exec wagehood-trading python -c "
+import os
+print('Alpaca Credentials Check:')
+api_key = os.getenv('ALPACA_API_KEY')
+secret_key = os.getenv('ALPACA_SECRET_KEY')
+print(f'  API Key: {\"✅ SET\" if api_key else \"❌ MISSING\"}')
+print(f'  Secret Key: {\"✅ SET\" if secret_key else \"❌ MISSING\"}')
+if api_key and secret_key:
+    print(f'  API Key length: {len(api_key)}')
+    print(f'  Secret Key length: {len(secret_key)}')
+"
+
+# Check container resource usage
+docker exec wagehood-trading python -c "
+import psutil
+import os
+print('Container Resource Usage:')
+print(f'  CPU usage: {psutil.cpu_percent()}%')
+print(f'  Memory usage: {psutil.virtual_memory().percent}%')
+print(f'  Disk usage: {psutil.disk_usage(\"/\").percent}%')
+"
+```
+
+#### Performance Issues
+```bash
+# Check Redis performance
+docker exec wagehood-trading redis-cli --latency-history
+
+# Monitor stream processing
+docker exec wagehood-trading redis-cli XINFO STREAM market_data_stream
+
+# Check calculation engine performance
+docker exec wagehood-trading python -c "
+from src.realtime.calculation_engine import CalculationEngine
+from src.realtime.config_manager import ConfigManager
+from src.storage.cache import cache_manager
+
+config = ConfigManager()
+print('System Performance Check:')
+print(f'  Enabled symbols: {len(config.get_enabled_symbols())}')
+print(f'  Redis connection: {\"✅ OK\" if cache_manager.redis_client.ping() else \"❌ FAILED\"}')
+"
+```
+
 ### Debug Mode
 
 ```bash
@@ -1441,6 +1714,77 @@ except Exception as e:
 3. **Limit data size**: Use reasonable periods (e.g., 252 days) for backtesting
 4. **Optimize calculations**: Use NumPy arrays when available for indicator calculations
 5. **Optimize Redis**: Tune memory and connection settings for worker service
+
+## 🆕 Recent Feature Updates
+
+### Strategy-Timeframe Mapping
+
+Automatic routing of trading signals based on strategy and timeframe combinations:
+
+```bash
+# Configure strategy-timeframe mappings
+DISCORD_STRATEGY_TIMEFRAME_MAPPING=macd_rsi:1d,sr_breakout:1d,rsi_trend:1h,bollinger_breakout:1h
+```
+
+**Mapping Logic:**
+- **MACD+RSI**: 1d timeframe → Swing trading channel
+- **Support/Resistance**: 1d timeframe → Swing trading channel  
+- **RSI Trend**: 1h timeframe → Day trading channel
+- **Bollinger Breakout**: 1h timeframe → Day trading channel
+
+### Separate Alert Symbol Lists
+
+Independent configuration of symbols for notifications vs main processing:
+
+```bash
+# Main watchlist for processing (all symbols)
+WATCHLIST_SYMBOLS=AAPL,MSFT,GOOGL,TSLA,SPY,QQQ,IWM,AMZN,NVDA,META
+
+# Focused list for Discord notifications (high-priority symbols only)
+DISCORD_ALERT_SYMBOLS=AAPL,MSFT,GOOGL,TSLA,SPY
+```
+
+**Benefits:**
+- Process comprehensive symbol list for analysis
+- Limit notifications to key trading symbols
+- Reduce notification noise and focus on priority symbols
+- Separate day trading symbols from swing trading symbols
+
+### Multi-Channel Webhook Configuration
+
+Strategy-specific webhook routing with individual rate limiting:
+
+```bash
+# Swing Trading Strategies (1d timeframe)
+DISCORD_WEBHOOK_MACD_RSI=https://discord.com/api/webhooks/swing-macd-rsi/token
+DISCORD_RATE_LIMIT_MACD_RSI=8                 # 8 notifications/hour
+
+DISCORD_WEBHOOK_SR_BREAKOUT=https://discord.com/api/webhooks/swing-sr/token
+DISCORD_RATE_LIMIT_SR_BREAKOUT=6              # 6 notifications/hour
+
+# Day Trading Strategies (1h timeframe)
+DISCORD_WEBHOOK_RSI_TREND=https://discord.com/api/webhooks/day-rsi/token
+DISCORD_RATE_LIMIT_RSI_TREND=12               # 12 notifications/hour
+
+DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=https://discord.com/api/webhooks/day-bollinger/token
+DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT=15      # 15 notifications/hour
+```
+
+### Enhanced Production Deployment
+
+**Docker Container Features:**
+- Integrated Redis server for standalone operation
+- Mandatory Alpaca credential validation
+- Comprehensive health checks with connectivity testing
+- Security-hardened container with non-root user
+- Graceful shutdown handling and resource management
+
+**Key Improvements:**
+- Credential validation prevents container startup without valid API keys
+- Health checks verify Alpaca connectivity and system functionality
+- Resource limits prevent runaway resource consumption
+- Persistent volumes for data and log storage
+- Production-ready logging and monitoring
 
 ## 📚 Research Foundation
 
