@@ -390,7 +390,7 @@ class TradingStrategy(ABC):
 
         return {}
 
-    def _calculate_overall_signal_quality(self, signals: List[Signal]) -> float:
+    def _calculate_overall_signal_quality(self, signals: List[Dict[str, Any]]) -> float:
         """Calculate overall signal quality score"""
         if not signals:
             return 0.0
@@ -399,7 +399,7 @@ class TradingStrategy(ABC):
 
         for signal in signals:
             # Calculate individual signal quality
-            confidence_score = signal.confidence
+            confidence_score = signal.get("confidence", 0)
 
             # Check for signal timing quality
             timing_score = self._assess_signal_timing(signal)
@@ -521,59 +521,59 @@ class TradingStrategy(ABC):
             "optimization_target": "signal_quality",
         }
 
-    def _enhance_signal_quality(self, signals: List[Signal]) -> List[Signal]:
+    def _enhance_signal_quality(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Enhance signal quality through additional filtering and validation"""
         if not signals:
             return signals
 
         # Sort by confidence (highest first)
-        sorted_signals = sorted(signals, key=lambda s: s.confidence, reverse=True)
+        sorted_signals = sorted(signals, key=lambda s: s.get("confidence", 0), reverse=True)
 
         # Apply quality enhancements
         enhanced_signals = []
         for signal in sorted_signals:
             # Skip low-quality signals
-            if signal.confidence < 0.4:
+            if signal.get("confidence", 0) < 0.4:
                 continue
 
             # Add signal strength indicators
-            signal.metadata["signal_strength"] = self._calculate_signal_strength(signal)
+            signal["metadata"]["signal_strength"] = self._calculate_signal_strength(signal)
 
             # Add market timing assessment
-            signal.metadata["timing_quality"] = self._assess_signal_timing(signal)
+            signal["metadata"]["timing_quality"] = self._assess_signal_timing(signal)
 
             enhanced_signals.append(signal)
 
         return enhanced_signals
 
-    def _calculate_signal_strength(self, signal: Signal) -> str:
+    def _calculate_signal_strength(self, signal: Dict[str, Any]) -> str:
         """Calculate signal strength category"""
-        if signal.confidence >= 0.8:
+        if signal.get("confidence", 0) >= 0.8:
             return "strong"
-        elif signal.confidence >= 0.6:
+        elif signal.get("confidence", 0) >= 0.6:
             return "moderate"
         else:
             return "weak"
 
-    def _assess_signal_timing(self, signal: Signal) -> float:
+    def _assess_signal_timing(self, signal: Dict[str, Any]) -> float:
         """Assess signal timing quality"""
         # Basic timing assessment - can be overridden by subclasses
-        if signal.timestamp is None:
+        if signal.get("timestamp") is None:
             return 0.0
 
         # Signal is recent and well-timed
         return 0.8
 
-    def _assess_signal_context(self, signal: Signal) -> float:
+    def _assess_signal_context(self, signal: Dict[str, Any]) -> float:
         """Assess signal context quality"""
         # Check metadata richness and context
-        if not signal.metadata:
+        if not signal.get("metadata"):
             return 0.0
 
         # Count meaningful metadata fields
         meaningful_fields = ["signal_name", "trend", "momentum", "volume_confirmation"]
         present_fields = sum(
-            1 for field in meaningful_fields if field in signal.metadata
+            1 for field in meaningful_fields if field in signal.get("metadata", {})
         )
 
         return present_fields / len(meaningful_fields)

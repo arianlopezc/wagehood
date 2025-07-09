@@ -52,8 +52,8 @@ class MovingAverageCrossover(TradingStrategy):
         super().__init__("MovingAverageCrossover", default_params)
 
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate Golden Cross and Death Cross signals
 
@@ -134,13 +134,13 @@ class MovingAverageCrossover(TradingStrategy):
 
     def _create_golden_cross_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         short_ema: float,
         long_ema: float,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create Golden Cross (bullish) signal"""
 
         # Calculate confidence based on multiple factors
@@ -186,14 +186,14 @@ class MovingAverageCrossover(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.BUY,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "BUY",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Golden Cross",
                 short_ema=short_ema,
                 long_ema=long_ema,
@@ -201,19 +201,19 @@ class MovingAverageCrossover(TradingStrategy):
                 volume_confirmation=volume_confidence,
                 trend_strength=trend_strength,
             ),
-        )
+        }
 
         return signal
 
     def _create_death_cross_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         short_ema: float,
         long_ema: float,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create Death Cross (bearish) signal"""
 
         # Calculate confidence based on multiple factors
@@ -257,14 +257,14 @@ class MovingAverageCrossover(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.SELL,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "SELL",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Death Cross",
                 short_ema=short_ema,
                 long_ema=long_ema,
@@ -272,12 +272,12 @@ class MovingAverageCrossover(TradingStrategy):
                 volume_confirmation=volume_confidence,
                 trend_strength=trend_strength,
             ),
-        )
+        }
 
         return signal
 
     def _calculate_trend_strength(
-        self, data: MarketData, index: int, direction: str
+        self, data: Dict[str, Any], index: int, direction: str
     ) -> float:
         """Calculate trend strength based on recent price action"""
 
@@ -369,19 +369,19 @@ class MovingAverageCrossover(TradingStrategy):
             "volume_threshold": [1.1, 1.2, 1.5, 2.0],
         }
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Strategy-specific signal validation"""
 
         # Check if signal type is appropriate
-        if signal.signal_type not in [SignalType.BUY, SignalType.SELL]:
+        if signal.get("signal_type") not in ["BUY", "SELL"]:
             return False
 
         # Check confidence threshold
-        if signal.confidence < self.parameters["min_confidence"]:
+        if signal.get("confidence", 0) < self.parameters["min_confidence"]:
             return False
 
         # Check metadata for required fields
-        metadata = signal.metadata
+        metadata = signal.get("metadata", {})
         if not metadata.get("short_ema") or not metadata.get("long_ema"):
             return False
 

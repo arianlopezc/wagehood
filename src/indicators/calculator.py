@@ -58,10 +58,7 @@ from .levels import (
     calculate_support_resistance,
     calculate_pivot_points,
     calculate_fibonacci_retracements,
-    calculate_fibonacci_extensions,
-    detect_breakouts,
-    calculate_trend_lines,
-)
+    )
 
 
 class IndicatorCalculator:
