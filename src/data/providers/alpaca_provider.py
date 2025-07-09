@@ -16,8 +16,8 @@ try:
     from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
     from alpaca.data.live import StockDataStream, CryptoDataStream
     from alpaca.data.requests import (
-        StockBarsRequest, StockQuotesRequest, StockTradesRequest,
-        CryptoBarsRequest, CryptoQuoteRequest, CryptoTradesRequest
+        StockBarsRequest,
+        CryptoBarsRequest
     )
     from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
     from alpaca.data.enums import DataFeed, CryptoFeed
@@ -33,7 +33,7 @@ except ImportError:
     class APIError(Exception):
         pass
 
-from src.data.providers.base import DataProvider, DataProviderError, ConnectionError, DataRetrievalError
+from src.data.providers.base import DataProvider, ConnectionError, DataRetrievalError
 from src.core.models import OHLCV, TimeFrame, MarketData
 
 logger = logging.getLogger(__name__)

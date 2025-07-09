@@ -13,49 +13,49 @@ SIGNAL_GENERATION_TIMEOUT = 30.0  # 30 seconds for signal generation
 
 # Test scenarios
 TRADING_SCENARIOS = {
-    'bull_market': {
-        'description': 'Strong uptrend with momentum signals',
-        'duration_days': 30,
-        'expected_signals': 'buy_heavy',
-        'expected_performance': 'positive'
+    "bull_market": {
+        "description": "Strong uptrend with momentum signals",
+        "duration_days": 30,
+        "expected_signals": "buy_heavy",
+        "expected_performance": "positive",
     },
-    'bear_market': {
-        'description': 'Strong downtrend with risk-off signals',
-        'duration_days': 30,
-        'expected_signals': 'sell_heavy',
-        'expected_performance': 'protected'
+    "bear_market": {
+        "description": "Strong downtrend with risk-off signals",
+        "duration_days": 30,
+        "expected_signals": "sell_heavy",
+        "expected_performance": "protected",
     },
-    'sideways_market': {
-        'description': 'Range-bound market with limited signals',
-        'duration_days': 60,
-        'expected_signals': 'minimal',
-        'expected_performance': 'stable'
+    "sideways_market": {
+        "description": "Range-bound market with limited signals",
+        "duration_days": 60,
+        "expected_signals": "minimal",
+        "expected_performance": "stable",
     },
-    'volatile_market': {
-        'description': 'High volatility with frequent signals',
-        'duration_days': 20,
-        'expected_signals': 'frequent',
-        'expected_performance': 'risk_managed'
-    }
+    "volatile_market": {
+        "description": "High volatility with frequent signals",
+        "duration_days": 20,
+        "expected_signals": "frequent",
+        "expected_performance": "risk_managed",
+    },
 }
 
 # System integration points
 INTEGRATION_POINTS = [
-    'data_ingestion_to_storage',
-    'storage_to_calculation',
-    'calculation_to_signals',
-    'signals_to_portfolio',
-    'portfolio_to_reporting',
-    'real_time_processing',
-    'error_handling_and_recovery'
+    "data_ingestion_to_storage",
+    "storage_to_calculation",
+    "calculation_to_signals",
+    "signals_to_portfolio",
+    "portfolio_to_reporting",
+    "real_time_processing",
+    "error_handling_and_recovery",
 ]
 
 # Performance expectations for E2E tests
 E2E_PERFORMANCE_TARGETS = {
-    'data_latency_ms': 1000,
-    'signal_generation_ms': 5000,
-    'portfolio_update_ms': 2000,
-    'report_generation_ms': 10000,
-    'memory_usage_mb': 1024,
-    'cpu_usage_percent': 85
+    "data_latency_ms": 1000,
+    "signal_generation_ms": 5000,
+    "portfolio_update_ms": 2000,
+    "report_generation_ms": 10000,
+    "memory_usage_mb": 1024,
+    "cpu_usage_percent": 85,
 }

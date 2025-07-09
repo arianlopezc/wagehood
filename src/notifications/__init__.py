@@ -19,14 +19,14 @@ from .multi_channel_service import MultiChannelNotificationService
 
 __all__ = [
     # Single-channel components
-    'DiscordNotifier',
-    'NotificationService', 
-    'MessageFormatter',
-    'NotificationConfig',
-    'NotificationRateLimiter',
+    "DiscordNotifier",
+    "NotificationService",
+    "MessageFormatter",
+    "NotificationConfig",
+    "NotificationRateLimiter",
     # Multi-channel components
-    'MultiChannelNotificationConfig',
-    'StrategyChannelConfig', 
-    'MultiChannelDiscordNotifier',
-    'MultiChannelNotificationService'
+    "MultiChannelNotificationConfig",
+    "StrategyChannelConfig",
+    "MultiChannelDiscordNotifier",
+    "MultiChannelNotificationService",
 ]

@@ -1,77 +1,79 @@
-# Wagehood Trading Analysis System
+# Wagehood Signal Detection System
 
-**A Redis-based worker service for real-time market analysis with Python API for strategy analysis, market monitoring, and backtesting. Built with data processing and trading strategy evaluation capabilities.**
+**A Redis-based worker service for real-time market signal detection with Python API for strategy analysis and market monitoring. Built with data processing and signal detection capabilities.**
+
+> **⚠️ IMPORTANT DISCLAIMER**: This is a signal detection system only. It does not execute trades or manage portfolios. All signals are for analysis and educational purposes only.
 
 ## 🚀 Overview
 
-Wagehood is a trading system for systematic traders and quantitative researchers. It combines trading strategies with real-time data processing, providing tools for strategy development, testing, and deployment.
+Wagehood is a signal detection system for systematic traders and quantitative researchers. It combines signal generation strategies with real-time data processing, providing tools for strategy development, testing, and signal analysis.
 
 ### Key Features
 
-- **5 Trading Strategies** with documented win rates up to 73%
+- **5 Signal Detection Strategies** with comprehensive signal analysis capabilities
 - **Redis-Based Worker Service** with real-time market data processing
-- **Python API** - Market analysis and monitoring interfaces
-- **Strategy Analysis & Optimization** - Analyze which strategies work best for your trading style
-- **Strategy Documentation** - Detailed explanations of signal logic and parameters
+- **Python API** - Market analysis and signal monitoring interfaces
+- **Strategy Analysis & Optimization** - Analyze which strategies generate the highest quality signals
+- **Strategy Documentation** - Detailed explanations of signal generation logic and parameters
 - **Real-Time Processing** with Redis Streams for event-driven architecture
-- **Alpaca Markets Integration** for live trading and commission-free execution
+- **Alpaca Markets Integration** for historical data and market analysis
 - **Testing Suite** with code coverage tracking
 
 ## 🎯 Core Trading Strategies
 
 ### Multi-Strategy Multi-Timeframe System
 
-The system supports multi-dimensional analysis across:
-- **5 trading strategies** with documented performance
+The system supports multi-dimensional signal analysis across:
+- **5 signal detection strategies** with comprehensive documentation
 - **9 timeframes** from 1-minute to monthly
-- **3 trading profiles** (Day, Swing, Position)
+- **3 analysis profiles** (Short-term, Medium-term, Long-term)
 - **Watchlist management**
 
 ### Implemented Strategies
 
-| Strategy | Win Rate | Avg Return | Best Timeframes | Trading Profile | Description |
-|----------|----------|------------|----------------|-----------------|-------------|
-| **MACD+RSI Combined** | 73% | 0.88%/trade | 1h, 4h, 1d | Swing/Position | Momentum strategy combining MACD and RSI |
-| **RSI Trend Following** | 68% | 0.6%/trade | 15m, 30m, 1h | Day/Swing | Trend-aware RSI with pullbacks |
-| **Bollinger Band Breakout** | 65% | 0.9%/trade | 5m, 15m, 1h | Day/Swing | Volatility expansion strategy |
-| **Support/Resistance Breakout** | 58% | 1.4%/trade | 1h, 4h, 1d | Swing/Position | Level-based breakout trading |
-| **Moving Average Crossover** | 45% | 2.1%/trade | 1d, 1w, 1M | Position | Golden/Death cross signals |
+| Strategy | Signal Logic | Best Timeframes | Analysis Profile | Description |
+|----------|-------------|----------------|------------------|-------------|
+| **MACD+RSI Combined** | Momentum convergence | 1h, 4h, 1d | Medium/Long-term | Momentum strategy combining MACD and RSI signals |
+| **RSI Trend Following** | Trend-aware oscillation | 15m, 30m, 1h | Short/Medium-term | Trend-aware RSI with pullback signals |
+| **Bollinger Band Breakout** | Volatility expansion | 5m, 15m, 1h | Short/Medium-term | Volatility expansion signal detection |
+| **Support/Resistance Breakout** | Level breakouts | 1h, 4h, 1d | Medium/Long-term | Level-based breakout signal detection |
+| **Moving Average Crossover** | MA crossover signals | 1d, 1w, 1M | Long-term | Golden/Death cross signal detection |
 
-### Trading Profiles
+### Analysis Profiles
 
-**Day Trading Profile:**
+**Short-Term Analysis:**
 - **Timeframes:** 1m, 5m, 15m
-- **Focus:** High-frequency signals, quick profits
+- **Focus:** High-frequency signals, rapid signal generation
 - **Best Strategies:** RSI Trend, Bollinger Breakout
-- **Capital Requirements:** $25,000+ (PDT rule)
-- **Time Commitment:** Active monitoring required
+- **Signal Frequency:** Multiple signals per hour
+- **Use Case:** Active market monitoring and quick signal identification
 
-**Swing Trading Profile:**
+**Medium-Term Analysis:**
 - **Timeframes:** 30m, 1h, 4h  
-- **Focus:** Multi-day positions (2-10 days)
+- **Focus:** Multi-hour signal patterns (hours to days)
 - **Best Strategies:** MACD+RSI, RSI Trend, Bollinger Breakout
-- **Capital Requirements:** $5,000-$25,000
-- **Time Commitment:** Daily monitoring
+- **Signal Frequency:** Daily signal generation
+- **Use Case:** Swing analysis and trend identification
 
-**Position Trading Profile:**
+**Long-Term Analysis:**
 - **Timeframes:** 1d, 1w, 1M
-- **Focus:** Long-term positions (weeks to months)
+- **Focus:** Long-term signal patterns (days to weeks)
 - **Best Strategies:** Moving Average Crossover, Support/Resistance Breakout
-- **Capital Requirements:** $1,000+
-- **Time Commitment:** Weekly monitoring
+- **Signal Frequency:** Weekly signal generation
+- **Use Case:** Position analysis and long-term trend detection
 
-### Strategy Assets Classification
+### Signal Detection Asset Classes
 
-**Suggested Asset Classes:**
-1. **Commodities** - Best trend-following performance
-2. **Cryptocurrencies** - High volatility, strong trends  
-3. **Forex Major Pairs** - Clear central bank-driven trends
-4. **Index ETFs** - Reduced individual stock risk
+**Recommended Asset Classes for Signal Analysis:**
+1. **Commodities** - Clear trend-following signals
+2. **Cryptocurrencies** - High volatility, strong signal patterns  
+3. **Forex Major Pairs** - Clear central bank-driven signal trends
+4. **Index ETFs** - Consistent signal patterns with reduced noise
 
 **Timeframe Recommendations:**
-- **Day Trading**: RSI (7-period), Bollinger Bands
-- **Swing Trading**: All strategies optimal
-- **Position Trading**: Moving Average Crossover
+- **Short-Term Analysis**: RSI (7-period), Bollinger Bands
+- **Medium-Term Analysis**: All strategies provide quality signals
+- **Long-Term Analysis**: Moving Average Crossover signals
 
 ## 🏗️ System Architecture
 
@@ -82,13 +84,13 @@ The system supports multi-dimensional analysis across:
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Redis Cache     │◀───│ Calculation     │◀───│ Strategy        │
-│ (Results)       │    │ Engine          │    │ Execution       │
+│ Redis Cache     │◀───│ Calculation     │◀───│ Signal          │
+│ (Results)       │    │ Engine          │    │ Generation      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Discord         │◀───│ Data Services   │◀───│ Analysis &      │
-│ Notifications   │    │ & Storage       │    │ Backtesting     │
+│ Discord         │◀───│ Data Services   │◀───│ Signal Analysis │
+│ Notifications   │    │ & Storage       │    │ & Evaluation    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -100,12 +102,11 @@ src/
 ├── data/               # Data management and providers
 │   └── providers/      # Alpaca, mock, and extensible providers
 ├── indicators/         # 20+ technical indicator calculations
-├── strategies/         # 5 trading strategy implementations  
-├── backtest/           # Backtesting engine with execution simulation
+├── strategies/         # 5 signal detection strategy implementations  
+├── backtest/           # Signal analysis engine with historical validation
 ├── realtime/           # Real-time processing and data ingestion
 ├── services/           # Analysis and data services
-├── trading/           # Live trading integration (Alpaca)
-├── analysis/          # Performance evaluation and comparison
+├── analysis/          # Signal evaluation and comparison
 └── storage/           # Results storage and caching
 
 Python API:
@@ -141,13 +142,13 @@ Python API:
 
 ## 🚀 Quick Start
 
-> **💡 Worker Service Architecture**: The system runs as a Redis-based worker service with Python API for market analysis and monitoring.
+> **💡 Worker Service Architecture**: The system runs as a Redis-based worker service with Python API for market signal detection and analysis.
 
 ### Prerequisites
 
 1. **Python 3.9+** 
 2. **Redis Server** (for real-time processing)
-3. **Alpaca Markets Account** (optional, for live data/trading)
+3. **Alpaca Markets Account** (optional, for live data/historical analysis)
 
 ```bash
 # Install Redis
@@ -214,14 +215,14 @@ python -c "from src.strategies import create_strategy; print('Strategies working
 ```python
 from src.data.mock_generator import MockDataGenerator
 from src.strategies import create_strategy
-from src.backtest.engine import BacktestEngine
+from src.backtest.engine import SignalAnalysisEngine
 from src.core.models import MarketData, TimeFrame
 
 # Generate sample data
 generator = MockDataGenerator()
 ohlcv_data = generator.generate_realistic_data("SPY", periods=252)
 
-# Create MarketData object for backtesting
+# Create MarketData object for analysis
 market_data = MarketData(
     symbol="SPY",
     timeframe=TimeFrame.DAILY,
@@ -233,18 +234,19 @@ market_data = MarketData(
 # Initialize strategy
 strategy = create_strategy('macd_rsi')
 
-# Run backtest
-engine = BacktestEngine()
-result = engine.run_backtest(strategy, market_data, initial_capital=10000)
+# Run signal analysis
+engine = SignalAnalysisEngine()
+result = engine.run_signal_analysis(strategy, market_data)
 
-print(f"Total Return: {result.performance_metrics.total_return_pct:.2%}")
-print(f"Win Rate: {result.performance_metrics.win_rate:.2%}")
-print(f"Sharpe Ratio: {result.performance_metrics.sharpe_ratio:.2f}")
+print(f"Total Signals: {result.total_signals}")
+print(f"Buy Signals: {result.buy_signals}")
+print(f"Sell Signals: {result.sell_signals}")
+print(f"Average Confidence: {result.avg_confidence:.2f}")
 ```
 
 ### Quick Start Guide
 
-Follow these steps to get your multi-strategy multi-timeframe trading system running:
+Follow these steps to get your multi-strategy multi-timeframe signal detection system running:
 
 ```bash
 # 1. Install dependencies
@@ -261,7 +263,7 @@ cp .env.example .env
 # 4. Run comprehensive tests to verify setup
 python run_tests.py --all
 
-# 5. Use the Python API for trading analysis
+# 5. Use the Python API for signal analysis
 python -c "
 from src.strategies import create_strategy
 from src.data.mock_generator import MockDataGenerator
@@ -285,7 +287,7 @@ market_data = MarketData(
 strategy = create_strategy('macd_rsi')
 engine = BacktestEngine()
 result = engine.run_backtest(strategy, market_data, initial_capital=10000)
-print(f'MACD+RSI Strategy Result: {result.performance_metrics.total_return_pct:.2%} return')
+print(f'MACD+RSI Strategy Result: {result.total_signals} signals, {result.avg_confidence:.2f} avg confidence')
 "
 
 # 6. Explore all available strategies
@@ -298,11 +300,11 @@ for name, strategy_class in STRATEGY_REGISTRY.items():
 
 ## 🖥️ Python API Interface
 
-The Wagehood system provides a Python API for multi-strategy multi-timeframe analysis and a Job Submission CLI for backtesting against the running production instance.
+The Wagehood system provides a Python API for multi-strategy multi-timeframe signal analysis and a Job Submission CLI for signal analysis against the running production instance.
 
 ## 📋 Job Submission CLI
 
-Submit backtest jobs to the running production instance and get detailed results with all signals and trades.
+Submit signal analysis jobs to the running production instance and get detailed results with all signals and analysis metrics.
 
 ```bash
 # Submit a backtest job
@@ -313,8 +315,8 @@ python submit_job.py --symbol AAPL --timeframe 1h --strategy macd_rsi \
 # - Real-time progress monitoring
 # - Complete performance metrics  
 # - All trading signals generated
-# - All trades with entry/exit details
-# - Profit/loss analysis
+# - Signal quality analysis
+# - Signal frequency and confidence analysis
 ```
 
 **Key Features:**
@@ -946,10 +948,10 @@ print(f"Best monthly return: {best_return:.4f}")
 cp .env.example .env
 
 # Edit .env with your credentials
-ALPACA_API_KEY=your_paper_api_key_here
-ALPACA_SECRET_KEY=your_paper_secret_key_here
+ALPACA_API_KEY=your_api_key_here
+ALPACA_SECRET_KEY=your_secret_key_here
 ALPACA_DATA_FEED=iex  # or 'sip' for $99/month full market data
-ALPACA_PAPER_TRADING=true  # Start with paper trading
+ALPACA_PAPER_TRADING=true  # For data access
 WATCHLIST_SYMBOLS=AAPL,MSFT,GOOGL,TSLA,SPY,QQQ,IWM
 ```
 
@@ -969,7 +971,6 @@ python scripts/setup_alpaca.py
 
 ```python
 from src.data.providers.alpaca_provider import AlpacaProvider
-from src.trading.alpaca_client import AlpacaTradingClient
 
 # Initialize data provider
 provider = AlpacaProvider({'paper': True, 'feed': 'iex'})
@@ -982,34 +983,30 @@ data = await provider.get_historical_data(
     start_date=datetime.now() - timedelta(days=30)
 )
 
-# Initialize trading client
-client = AlpacaTradingClient({'paper': True})
-await client.connect()
-
-# Get account info
-account = await client.get_account()
-print(f"Buying Power: ${account['buying_power']:,.2f}")
-
-# Place order
-order = await client.place_market_order(
+# Get real-time market data
+market_data = await provider.get_market_data(
     symbol="AAPL",
-    quantity=10,
-    side=AlpacaOrderSide.BUY
+    timeframe=TimeFrame.MINUTE_1
 )
+
+# Get account info (for data access validation)
+account = await provider.get_account()
+print(f"Account Status: {account['status']}")
+print(f"Data Feed: {account['data_feed']}")
 ```
 
-### Trading Safety
+### Data Access Safety
 
-**Always start with paper trading:**
+**Always use paper trading for development:**
 ```bash
-ALPACA_PAPER_TRADING=true  # $100,000 simulated capital
+ALPACA_PAPER_TRADING=true  # For safe development and testing
 ```
 
-**For live trading:**
+**For production signal detection:**
 1. Test thoroughly with paper trading first
-2. Start small with minimal position sizes  
-3. Monitor carefully with proper risk management
-4. Use stop losses to limit downside risk
+2. Use appropriate data feed (IEX for development, SIP for production)
+3. Monitor data quality and API rate limits
+4. Implement proper error handling for data feed interruptions
 
 ## ⚙️ Configuration
 
@@ -1170,11 +1167,11 @@ DISCORD_ENABLED_SR_BREAKOUT=true
 - **Memory Usage**: ~512MB for typical production workload
 - **CPU Usage**: 1-2 cores for optimal performance
 
-### Performance Targets
+### Signal Processing Performance
 
-- **Data Ingestion**: 1-second updates per asset
-- **Calculation Latency**: <100ms per indicator update
-- **API Response Time**: <10ms for cached data
+- **Signal Generation**: <100ms per signal calculation
+- **Analysis Latency**: <50ms per indicator update
+- **API Response Time**: <10ms for cached signal data
 - **Notification Delivery**: <5 seconds from signal to Discord
 - **System Throughput**: 20 symbols with 6 timeframes each
 
@@ -1197,21 +1194,21 @@ DISCORD_ENABLED_SR_BREAKOUT=true
 - **Recommended**: 2 CPU cores, 1GB RAM, dedicated Redis instance
 - **High Scale**: 4+ CPU cores, 2GB+ RAM, Redis cluster
 
-### Real-Time Processing
+### Real-Time Signal Processing
 
-- **Target: Sub-second Updates**: Market data processing frequency
-- **Optimized Calculations**: Efficient updates for most indicators
-- **Redis Streams**: Event-driven architecture for message delivery
+- **Target: Sub-second Updates**: Signal detection processing frequency
+- **Optimized Calculations**: Efficient updates for signal generation
+- **Redis Streams**: Event-driven architecture for signal delivery
 - **Circuit Breakers**: Fault tolerance for external data feeds
 - **Horizontal Scaling**: Add workers for more symbols
 
 ### API Performance
 
-- **Target Latency**: <50ms from market to system
-- **Data Queries**: <10ms for cached data, <100ms for fresh data
+- **Target Latency**: <50ms from market data to signal
+- **Signal Queries**: <10ms for cached signals, <100ms for fresh analysis
 - **Local Operations**: <10ms for cached operations
 - **Stream Processing**: <10ms through Redis pipeline
-- **Analysis Operations**: <1s for standard backtests
+- **Analysis Operations**: <1s for standard signal analysis
 
 ### Scalability
 
@@ -1856,9 +1853,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## ⚠️ Disclaimer
 
-This software is for educational and research purposes only. Past performance does not guarantee future results. Always conduct thorough testing and consider your risk tolerance before implementing any trading strategy. The authors are not responsible for any financial losses incurred through the use of this software.
+This software is for educational and research purposes only. **This is a signal detection system that does not execute trades or manage portfolios.** All signals are for analysis purposes only. The authors are not responsible for any financial decisions made based on the signals generated by this software.
 
-**Trading involves substantial risk and may not be suitable for all investors. Please trade responsibly.**
+**Signal detection involves analysis of historical patterns that may not predict future market behavior. Always conduct thorough testing and consider your risk tolerance before making any trading decisions based on these signals.**
 
 ---
 

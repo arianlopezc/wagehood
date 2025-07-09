@@ -1,9 +1,9 @@
 """
-Real-time Calculation Engine
+Real-time Signal Detection Engine
 
-This module provides the main calculation engine that processes market data
+This module provides the main signal detection engine that processes market data
 events from Redis Streams and performs incremental technical indicator
-calculations and strategy signal generation.
+calculations and multi-timeframe signal generation for Discord notifications.
 """
 
 import asyncio
@@ -36,20 +36,21 @@ from src.realtime.signal_engine import SignalEngine
 logger = logging.getLogger(__name__)
 
 
-class CalculationEngine:
+class SignalDetectionEngine:
     """
-    Advanced real-time calculation engine for multi-strategy multi-timeframe analysis.
+    Advanced real-time signal detection engine for multi-strategy multi-timeframe analysis.
 
     This engine processes market data events from Redis Streams and performs
-    sophisticated analysis across multiple timeframes simultaneously, generating
-    composite signals from multiple strategies with correlation analysis.
+    sophisticated signal detection across multiple timeframes simultaneously, generating
+    composite signals from multiple strategies with correlation analysis for Discord notifications.
 
     Features:
-    - Multi-timeframe data aggregation
+    - Multi-timeframe signal detection
     - Simultaneous processing of 5 strategies across 3+ timeframes
     - Efficient caching and memory management
     - Signal correlation and composite scoring
-    - High-frequency updates with performance optimization
+    - High-frequency signal updates with performance optimization
+    - Discord notification integration
     """
 
     def __init__(
@@ -58,7 +59,7 @@ class CalculationEngine:
         ingestion_service: MarketDataIngestionService,
     ):
         """
-        Initialize the advanced calculation engine.
+        Initialize the advanced signal detection engine.
 
         Args:
             config_manager: Configuration manager instance
@@ -82,24 +83,26 @@ class CalculationEngine:
         self._redis_client = None
         self._running = False
         self._tasks = []
-        
+
         # Get worker count from environment variable
         import os
+
         worker_count = int(os.getenv("CALCULATION_WORKERS", "8"))
         logger.info(f"Initializing ThreadPoolExecutor with {worker_count} workers")
         self._executor = ThreadPoolExecutor(max_workers=worker_count)
 
-        # Enhanced performance tracking for multi-timeframe processing
+        # Enhanced performance tracking for multi-timeframe signal detection
         self._stats_lock = threading.Lock()
         self._stats = {
-            "calculations_performed": 0,
+            "signal_detections_performed": 0,
             "signals_generated": 0,
             "composite_signals_generated": 0,
             "timeframe_updates": {},
             "strategy_timeframe_combinations": 0,
+            "discord_notifications_sent": 0,
             "errors": 0,
-            "last_calculation_time": None,
-            "average_calculation_time_ms": 0.0,
+            "last_signal_time": None,
+            "average_signal_time_ms": 0.0,
             "symbols_processed": set(),
             "indicators_calculated": {},
             "strategies_processed": {},
@@ -149,13 +152,13 @@ class CalculationEngine:
             raise
 
     async def start(self):
-        """Start the calculation engine."""
+        """Start the signal detection engine."""
         if self._running:
-            logger.warning("Calculation engine is already running")
+            logger.warning("Signal detection engine is already running")
             return
 
         self._running = True
-        logger.info("Starting calculation engine")
+        logger.info("Starting signal detection engine")
 
         try:
             # Get system configuration
@@ -183,18 +186,18 @@ class CalculationEngine:
             await asyncio.gather(*self._tasks)
 
         except Exception as e:
-            logger.error(f"Error in calculation engine: {e}")
+            logger.error(f"Error in signal detection engine: {e}")
             raise
         finally:
             self._running = False
             self._executor.shutdown(wait=True)
 
     async def stop(self):
-        """Stop the calculation engine."""
+        """Stop the signal detection engine."""
         if not self._running:
             return
 
-        logger.info("Stopping calculation engine")
+        logger.info("Stopping signal detection engine")
         self._running = False
 
         # Cancel all tasks
@@ -208,7 +211,7 @@ class CalculationEngine:
         # Shutdown executor
         self._executor.shutdown(wait=True)
 
-        logger.info("Calculation engine stopped")
+        logger.info("Signal detection engine stopped")
 
     async def _consume_market_data_stream(self):
         """Consume market data events from Redis Stream."""
@@ -331,11 +334,11 @@ class CalculationEngine:
             # Track symbol
             self._stats["symbols_processed"].add(symbol)
 
-            # Process calculations in thread pool to avoid blocking
+            # Process signal detection in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 self._executor,
-                self._calculate_indicators_for_symbol,
+                self._detect_signals_for_symbol,
                 symbol,
                 price,
                 message_data,
@@ -354,14 +357,12 @@ class CalculationEngine:
             logger.error(f"Error processing message {message_id}: {e}")
             self._stats["errors"] += 1
 
-    def _calculate_indicators_for_symbol(
-        self, symbol: str, price: float, message_data: Dict
-    ):
+    def _detect_signals_for_symbol(self, symbol: str, price: float, message_data: Dict):
         """
-        Calculate indicators and signals across all timeframes for a symbol.
+        Detect signals across all timeframes for a symbol and prepare Discord notifications.
 
-        This method now processes multiple timeframes simultaneously and generates
-        composite signals using the advanced signal engine.
+        This method processes multiple timeframes simultaneously and generates
+        composite signals using the advanced signal engine for Discord notifications.
 
         Args:
             symbol: Trading symbol
@@ -408,8 +409,8 @@ class CalculationEngine:
                     trading_profile=symbol_config.trading_profile,
                 )
 
-            # Prepare comprehensive calculation results
-            calculation_results = {
+            # Prepare comprehensive signal detection results
+            signal_detection_results = {
                 "timeframe_results": timeframe_results,
                 "composite_signal": (
                     composite_signal.get_signal_summary() if composite_signal else None
@@ -420,6 +421,12 @@ class CalculationEngine:
                     "trading_profile": symbol_config.trading_profile.value,
                     "enabled_strategies": symbol_config.enabled_strategies,
                 },
+                "signal_quality": self._assess_signal_quality(
+                    composite_signal, timeframe_results
+                ),
+                "discord_notification_ready": self._should_send_discord_notification(
+                    composite_signal
+                ),
             }
 
             # Also run legacy single-timeframe calculation for backward compatibility
@@ -427,38 +434,50 @@ class CalculationEngine:
                 symbol, price, message_data
             )
             if legacy_results:
-                calculation_results["legacy_indicators"] = legacy_results
+                signal_detection_results["legacy_indicators"] = legacy_results
 
                 # Generate legacy signals
                 legacy_signals = self._generate_trading_signals(symbol, legacy_results)
                 if legacy_signals:
-                    calculation_results["legacy_signals"] = legacy_signals
+                    signal_detection_results["legacy_signals"] = legacy_signals
 
             # Store results in cache with timeframe-specific keys
-            self._store_multi_timeframe_results(symbol, calculation_results)
+            self._store_multi_timeframe_results(symbol, signal_detection_results)
 
             # Update performance statistics
             self._update_multi_timeframe_stats(
                 symbol, timeframe_results, composite_signal
             )
 
-            # Publish calculation event (skip in non-async context)
+            # Publish signal event and Discord notification (skip in non-async context)
             try:
                 asyncio.create_task(
-                    self.ingestion_service.publish_calculation_event(
-                        symbol, calculation_results
+                    self.ingestion_service.publish_signal_event(
+                        symbol, signal_detection_results
                     )
                 )
+
+                # Send Discord notification if signal quality is good
+                if signal_detection_results.get("discord_notification_ready", False):
+                    discord_data = self._prepare_discord_notification(
+                        symbol, composite_signal, price
+                    )
+                    asyncio.create_task(
+                        self.ingestion_service.publish_discord_notification(
+                            "signal", symbol, discord_data
+                        )
+                    )
+                    self._stats["discord_notifications_sent"] += 1
             except RuntimeError:
                 # No event loop running - skip async publishing in test context
                 logger.debug(
                     f"Skipping async event publishing for {symbol} (no event loop)"
                 )
 
-            self._increment_calculation_count()
+            self._increment_signal_detection_count()
 
         except Exception as e:
-            logger.error(f"Error in multi-timeframe calculation for {symbol}: {e}")
+            logger.error(f"Error in multi-timeframe signal detection for {symbol}: {e}")
             self._increment_error_count()
 
     def _calculate_single_indicator(
@@ -867,17 +886,17 @@ class CalculationEngine:
         """Update performance statistics thread-safely."""
         try:
             with self._stats_lock:
-                # Update average calculation time (exponential moving average)
-                if self._stats["average_calculation_time_ms"] == 0:
-                    self._stats["average_calculation_time_ms"] = calculation_time_ms
+                # Update average signal detection time (exponential moving average)
+                if self._stats["average_signal_time_ms"] == 0:
+                    self._stats["average_signal_time_ms"] = calculation_time_ms
                 else:
                     alpha = 0.1  # Smoothing factor
-                    self._stats["average_calculation_time_ms"] = (
+                    self._stats["average_signal_time_ms"] = (
                         alpha * calculation_time_ms
-                        + (1 - alpha) * self._stats["average_calculation_time_ms"]
+                        + (1 - alpha) * self._stats["average_signal_time_ms"]
                     )
 
-                self._stats["last_calculation_time"] = datetime.now()
+                self._stats["last_signal_time"] = datetime.now()
 
         except Exception as e:
             logger.error(f"Error updating performance stats: {e}")
@@ -888,13 +907,15 @@ class CalculationEngine:
             try:
                 await asyncio.sleep(60)  # Report every minute
 
-                if self._stats["calculations_performed"] > 0:
+                if self._stats["signal_detections_performed"] > 0:
                     logger.info(
-                        f"Calculation Engine Stats - "
-                        f"Calculations: {self._stats['calculations_performed']}, "
-                        f"Signals: {self._stats['signals_generated']}, "
+                        f"Signal Detection Engine Stats - "
+                        f"Signal Detections: {self._stats['signal_detections_performed']}, "
+                        f"Signals Generated: {self._stats['signals_generated']}, "
+                        f"Composite Signals: {self._stats['composite_signals_generated']}, "
+                        f"Discord Notifications: {self._stats['discord_notifications_sent']}, "
                         f"Errors: {self._stats['errors']}, "
-                        f"Avg Time: {self._stats['average_calculation_time_ms']:.2f}ms, "
+                        f"Avg Time: {self._stats['average_signal_time_ms']:.2f}ms, "
                         f"Symbols: {len(self._stats['symbols_processed'])}"
                     )
 
@@ -1079,7 +1100,7 @@ class CalculationEngine:
                         loop = asyncio.get_event_loop()
                         await loop.run_in_executor(
                             self._executor,
-                            self._calculate_indicators_for_symbol,
+                            self._detect_signals_for_symbol,
                             symbol,
                             price,
                             latest_data,
@@ -1116,10 +1137,169 @@ class CalculationEngine:
         with self._stats_lock:
             self._stats["errors"] += 1
 
-    def _increment_calculation_count(self):
-        """Thread-safe calculation count increment."""
+    def _increment_signal_detection_count(self):
+        """Thread-safe signal detection count increment."""
         with self._stats_lock:
-            self._stats["calculations_performed"] += 1
+            self._stats["signal_detections_performed"] += 1
+
+    def _assess_signal_quality(
+        self, composite_signal: Any, timeframe_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Assess the quality of a signal for filtering noise.
+
+        Args:
+            composite_signal: The composite signal object
+            timeframe_results: Results from timeframe processing
+
+        Returns:
+            Dictionary with signal quality metrics
+        """
+        try:
+            if not composite_signal:
+                return {
+                    "quality_score": 0.0,
+                    "confidence": 0.0,
+                    "timeframe_alignment": 0.0,
+                    "strategy_alignment": 0.0,
+                    "noise_level": "high",
+                    "recommendation": "filter_out",
+                }
+
+            # Get signal summary
+            signal_summary = composite_signal.get_signal_summary()
+
+            # Calculate quality score based on multiple factors
+            confidence = signal_summary.get("confidence", 0.0)
+            timeframe_alignment = signal_summary.get("timeframe_alignment", 0.0)
+            strategy_alignment = signal_summary.get("strategy_alignment", 0.0)
+            contributing_signals = signal_summary.get("contributing_signals", 0)
+
+            # Quality score is weighted average of alignment and confidence
+            quality_score = (
+                confidence * 0.4 + timeframe_alignment * 0.3 + strategy_alignment * 0.3
+            )
+
+            # Boost quality if multiple signals contribute
+            if contributing_signals > 3:
+                quality_score *= 1.1
+            elif contributing_signals > 1:
+                quality_score *= 1.05
+
+            # Determine noise level
+            if quality_score >= 0.7:
+                noise_level = "low"
+                recommendation = "send_notification"
+            elif quality_score >= 0.5:
+                noise_level = "medium"
+                recommendation = "send_notification"
+            else:
+                noise_level = "high"
+                recommendation = "filter_out"
+
+            return {
+                "quality_score": min(quality_score, 1.0),
+                "confidence": confidence,
+                "timeframe_alignment": timeframe_alignment,
+                "strategy_alignment": strategy_alignment,
+                "contributing_signals": contributing_signals,
+                "noise_level": noise_level,
+                "recommendation": recommendation,
+            }
+
+        except Exception as e:
+            logger.error(f"Error assessing signal quality: {e}")
+            return {
+                "quality_score": 0.0,
+                "confidence": 0.0,
+                "timeframe_alignment": 0.0,
+                "strategy_alignment": 0.0,
+                "noise_level": "high",
+                "recommendation": "filter_out",
+            }
+
+    def _should_send_discord_notification(self, composite_signal: Any) -> bool:
+        """
+        Determine if a signal should trigger a Discord notification.
+
+        Args:
+            composite_signal: The composite signal object
+
+        Returns:
+            True if notification should be sent
+        """
+        try:
+            if not composite_signal:
+                return False
+
+            signal_summary = composite_signal.get_signal_summary()
+
+            # Check signal direction - don't notify for HOLD signals
+            direction = signal_summary.get("direction", "").upper()
+            if direction in ["HOLD", "PREPARE"]:
+                return False
+
+            # Check confidence threshold
+            confidence = signal_summary.get("confidence", 0.0)
+            if confidence < 0.6:  # Minimum confidence for Discord notifications
+                return False
+
+            # Check timeframe alignment
+            timeframe_alignment = signal_summary.get("timeframe_alignment", 0.0)
+            if timeframe_alignment < 0.4:  # Minimum alignment for notifications
+                return False
+
+            # Check if we have enough contributing signals
+            contributing_signals = signal_summary.get("contributing_signals", 0)
+            if contributing_signals < 2:  # Need at least 2 signals agreeing
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error checking Discord notification criteria: {e}")
+            return False
+
+    def _prepare_discord_notification(
+        self, symbol: str, composite_signal: Any, price: float
+    ) -> Dict[str, Any]:
+        """
+        Prepare Discord notification data from composite signal.
+
+        Args:
+            symbol: Trading symbol
+            composite_signal: The composite signal object
+            price: Current price
+
+        Returns:
+            Dictionary with Discord notification data
+        """
+        try:
+            if not composite_signal:
+                return {}
+
+            signal_summary = composite_signal.get_signal_summary()
+
+            return {
+                "symbol": symbol,
+                "signal": signal_summary.get("direction", "UNKNOWN").upper(),
+                "confidence": signal_summary.get("confidence", 0.0),
+                "strength": signal_summary.get("strength", "unknown"),
+                "price": price,
+                "timeframes_analyzed": signal_summary.get("timeframes_analyzed", 0),
+                "strategies_analyzed": signal_summary.get("strategies_analyzed", 0),
+                "timeframe_alignment": signal_summary.get("timeframe_alignment", 0.0),
+                "strategy_alignment": signal_summary.get("strategy_alignment", 0.0),
+                "contributing_signals": signal_summary.get("contributing_signals", 0),
+                "timestamp": signal_summary.get(
+                    "timestamp", datetime.now().isoformat()
+                ),
+                "signal_type": "multi_timeframe_composite",
+            }
+
+        except Exception as e:
+            logger.error(f"Error preparing Discord notification for {symbol}: {e}")
+            return {}
 
     def _calculate_legacy_indicators(
         self, symbol: str, price: float, message_data: Dict
@@ -1501,19 +1681,19 @@ class CalculationEngine:
 
 
 # Factory function for easy instantiation
-def create_calculation_engine(
+def create_signal_detection_engine(
     config_manager: ConfigManager = None,
     ingestion_service: MarketDataIngestionService = None,
-) -> CalculationEngine:
+) -> SignalDetectionEngine:
     """
-    Create a calculation engine instance.
+    Create a signal detection engine instance.
 
     Args:
         config_manager: Optional config manager (creates new one if None)
         ingestion_service: Optional ingestion service (creates new one if None)
 
     Returns:
-        CalculationEngine instance
+        SignalDetectionEngine instance
     """
     if config_manager is None:
         config_manager = ConfigManager()
@@ -1523,4 +1703,4 @@ def create_calculation_engine(
 
         ingestion_service = create_ingestion_service(config_manager)
 
-    return CalculationEngine(config_manager, ingestion_service)
+    return SignalDetectionEngine(config_manager, ingestion_service)

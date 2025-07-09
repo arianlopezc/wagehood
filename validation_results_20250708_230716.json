@@ -1,0 +1,34 @@
+{
+  "timestamp": "2025-07-08T23:07:14.832362",
+  "tests": {
+    "alpaca_connection": {
+      "status": "FAIL",
+      "error": "Alpaca API credentials required. Set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables or pass api_key and secret_key in config."
+    },
+    "data_flow": {
+      "status": "FAIL",
+      "error": "Alpaca API credentials required. Set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables or pass api_key and secret_key in config."
+    },
+    "indicators": {
+      "status": "FAIL",
+      "error": "cannot import name 'TechnicalIndicatorCalculator' from 'src.indicators.calculator' (/Users/arianlc/PycharmProjects/wagehood/src/indicators/calculator.py)"
+    },
+    "strategies": {
+      "status": "FAIL",
+      "error": "cannot import name 'MABreakoutStrategy' from 'src.strategies' (/Users/arianlc/PycharmProjects/wagehood/src/strategies/__init__.py)"
+    },
+    "realtime_processing": {
+      "status": "FAIL",
+      "error": "cannot import name 'TradingProfile' from 'src.realtime.config_manager' (/Users/arianlc/PycharmProjects/wagehood/src/realtime/config_manager.py)"
+    }
+  },
+  "errors": [],
+  "warnings": [],
+  "summary": {
+    "total_tests": 5,
+    "passed": 0,
+    "failed": 5,
+    "success_rate": 0.0,
+    "overall_status": "FAIL"
+  }
+}

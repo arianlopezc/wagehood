@@ -270,23 +270,25 @@ class RedisCache(CacheBackend):
         """Serialize value with JSON as primary format, pickle as fallback"""
         try:
             import gzip
-            
+
             # Try JSON first (more memory efficient and readable)
             try:
-                json_data = json.dumps(value, default=str).encode('utf-8')
+                json_data = json.dumps(value, default=str).encode("utf-8")
                 json_len = len(json_data)
-                
+
                 # Only compress JSON if it's large enough
                 if json_len > 2048:  # 2KB threshold
                     compressed = gzip.compress(json_data, compresslevel=6)
                     if len(compressed) < json_len * 0.9:
                         return b"JSON_GZIP:" + compressed
-                
+
                 return b"JSON:" + json_data
-                
+
             except (TypeError, ValueError):
                 # Fallback to pickle for complex objects that can't be JSON serialized
-                logger.debug(f"JSON serialization failed for {type(value)}, using pickle fallback")
+                logger.debug(
+                    f"JSON serialization failed for {type(value)}, using pickle fallback"
+                )
                 data = pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
                 data_len = len(data)
 
@@ -298,7 +300,7 @@ class RedisCache(CacheBackend):
                         return b"PICKLE_GZIP:" + compressed
 
                 return b"PICKLE:" + data
-                
+
         except Exception as e:
             logger.error(f"Failed to serialize value: {e}")
             raise
@@ -312,11 +314,11 @@ class RedisCache(CacheBackend):
                 # Decompress JSON data
                 compressed_data = data[10:]  # Remove "JSON_GZIP:" prefix
                 decompressed = gzip.decompress(compressed_data)
-                return json.loads(decompressed.decode('utf-8'))
+                return json.loads(decompressed.decode("utf-8"))
             elif data.startswith(b"JSON:"):
                 # Raw JSON data
                 json_data = data[5:]  # Remove "JSON:" prefix
-                return json.loads(json_data.decode('utf-8'))
+                return json.loads(json_data.decode("utf-8"))
             elif data.startswith(b"PICKLE_GZIP:"):
                 # Decompress pickle data
                 compressed_data = data[12:]  # Remove "PICKLE_GZIP:" prefix
@@ -339,12 +341,14 @@ class RedisCache(CacheBackend):
                 # Try to detect if it's raw JSON first
                 try:
                     # Attempt to decode as UTF-8 and parse as JSON
-                    text_data = data.decode('utf-8')
-                    if text_data.strip().startswith(('{', '[', '"')) or text_data.strip() in ('true', 'false', 'null'):
+                    text_data = data.decode("utf-8")
+                    if text_data.strip().startswith(
+                        ("{", "[", '"')
+                    ) or text_data.strip() in ("true", "false", "null"):
                         return json.loads(text_data)
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     pass
-                
+
                 # Legacy format (no prefix) - assume pickle
                 return pickle.loads(data)
         except Exception as e:

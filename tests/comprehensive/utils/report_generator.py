@@ -17,6 +17,7 @@ import jinja2
 
 class TestStatus(Enum):
     """Test execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     PASSED = "passed"
@@ -28,6 +29,7 @@ class TestStatus(Enum):
 @dataclass
 class TestResult:
     """Represents the result of a test execution."""
+
     name: str
     status: TestStatus
     duration: float
@@ -35,7 +37,7 @@ class TestResult:
     error: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
     timestamp: str = None
-    
+
     def __post_init__(self):
         if self.timestamp is None:
             self.timestamp = datetime.now().isoformat()
@@ -44,11 +46,11 @@ class TestResult:
 class ReportGenerator:
     """
     Generates comprehensive test reports in various formats.
-    
+
     Supports HTML reports with visualizations, JSON reports for
     programmatic access, and summary reports for CI/CD integration.
     """
-    
+
     def __init__(self):
         self.template_dir = Path(__file__).parent / "templates"
         self.template_dir.mkdir(exist_ok=True)
@@ -56,17 +58,17 @@ class ReportGenerator:
             loader=jinja2.FileSystemLoader(self.template_dir)
         )
         self._ensure_templates()
-    
+
     def _ensure_templates(self):
         """Ensure required templates exist."""
         self._create_comprehensive_template()
         self._create_mathematical_template()
         self._create_integration_template()
         self._create_performance_template()
-    
+
     def _create_comprehensive_template(self):
         """Create the comprehensive report template."""
-        template_content = '''
+        template_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,139 +233,127 @@ class ReportGenerator:
     </div>
 </body>
 </html>
-        '''
-        
+        """
+
         template_path = self.template_dir / "comprehensive_report.html"
         template_path.write_text(template_content)
-    
+
     def _create_mathematical_template(self):
         """Create mathematical validation report template."""
         # Create a specialized template for mathematical validation results
         pass
-    
+
     def _create_integration_template(self):
         """Create integration test report template."""
         # Create a specialized template for integration test results
         pass
-    
+
     def _create_performance_template(self):
         """Create performance test report template."""
         # Create a specialized template for performance test results
         pass
-    
+
     def generate_comprehensive_report(
         self,
         results: Dict[str, TestResult],
-        output_path: str = "comprehensive_report.html"
+        output_path: str = "comprehensive_report.html",
     ) -> str:
         """
         Generate a comprehensive HTML report from test results.
-        
+
         Args:
             results: Dictionary of test results keyed by suite name
             output_path: Path to save the report
-            
+
         Returns:
             Path to the generated report
         """
         # Calculate summary statistics
         summary = self._calculate_summary(results)
-        
+
         # Prepare template context
         context = {
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'summary': summary,
-            'results': list(results.values())
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "summary": summary,
+            "results": list(results.values()),
         }
-        
+
         # Generate report
-        template = self.jinja_env.get_template('comprehensive_report.html')
+        template = self.jinja_env.get_template("comprehensive_report.html")
         html_content = template.render(**context)
-        
+
         # Write to file
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(html_content)
-        
+
         return str(output_file)
-    
+
     def generate_mathematical_report(
-        self,
-        results: Dict[str, Any],
-        output_path: str = "mathematical_validation.html"
+        self, results: Dict[str, Any], output_path: str = "mathematical_validation.html"
     ) -> str:
         """Generate specialized mathematical validation report."""
         # Implementation for mathematical validation report
         pass
-    
+
     def generate_integration_report(
-        self,
-        results: Dict[str, Any],
-        output_path: str = "integration_results.html"
+        self, results: Dict[str, Any], output_path: str = "integration_results.html"
     ) -> str:
         """Generate specialized integration test report."""
         # Implementation for integration test report
         pass
-    
+
     def generate_performance_report(
-        self,
-        results: Dict[str, Any],
-        output_path: str = "performance_report.html"
+        self, results: Dict[str, Any], output_path: str = "performance_report.html"
     ) -> str:
         """Generate specialized performance test report."""
         # Implementation for performance test report
         pass
-    
+
     def generate_json_report(
-        self,
-        results: Dict[str, TestResult],
-        output_path: str = "test_results.json"
+        self, results: Dict[str, TestResult], output_path: str = "test_results.json"
     ) -> str:
         """
         Generate a JSON report for programmatic access.
-        
+
         Args:
             results: Dictionary of test results
             output_path: Path to save the JSON report
-            
+
         Returns:
             Path to the generated JSON report
         """
         # Convert results to JSON-serializable format
         json_results = {
-            'timestamp': datetime.now().isoformat(),
-            'summary': self._calculate_summary(results),
-            'results': {
-                name: asdict(result) for name, result in results.items()
-            }
+            "timestamp": datetime.now().isoformat(),
+            "summary": self._calculate_summary(results),
+            "results": {name: asdict(result) for name, result in results.items()},
         }
-        
+
         # Write to file
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(output_file, 'w') as f:
+
+        with open(output_file, "w") as f:
             json.dump(json_results, f, indent=2, default=str)
-        
+
         return str(output_file)
-    
+
     def generate_summary_report(
-        self,
-        results: Dict[str, TestResult],
-        output_path: str = "test_summary.txt"
+        self, results: Dict[str, TestResult], output_path: str = "test_summary.txt"
     ) -> str:
         """
         Generate a text summary report for CI/CD integration.
-        
+
         Args:
             results: Dictionary of test results
             output_path: Path to save the summary report
-            
+
         Returns:
             Path to the generated summary report
         """
         summary = self._calculate_summary(results)
-        
+
         # Generate text report
         report_lines = [
             "WAGEHOOD COMPREHENSIVE TEST SUMMARY",
@@ -377,41 +367,47 @@ class ReportGenerator:
             f"Success Rate: {summary['success_rate']:.1f}%",
             "",
             "SUITE RESULTS:",
-            "-" * 20
+            "-" * 20,
         ]
-        
+
         for name, result in results.items():
             status_symbol = "✓" if result.status == TestStatus.PASSED else "✗"
             report_lines.append(
                 f"{status_symbol} {name}: {result.status.value} ({result.duration:.2f}s)"
             )
-        
+
         report_content = "\n".join(report_lines)
-        
+
         # Write to file
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text(report_content)
-        
+
         return str(output_file)
-    
+
     def _calculate_summary(self, results: Dict[str, TestResult]) -> Dict[str, Any]:
         """Calculate summary statistics from test results."""
         total_suites = len(results)
-        passed_suites = sum(1 for r in results.values() if r.status == TestStatus.PASSED)
-        failed_suites = sum(1 for r in results.values() if r.status == TestStatus.FAILED)
+        passed_suites = sum(
+            1 for r in results.values() if r.status == TestStatus.PASSED
+        )
+        failed_suites = sum(
+            1 for r in results.values() if r.status == TestStatus.FAILED
+        )
         error_suites = sum(1 for r in results.values() if r.status == TestStatus.ERROR)
-        skipped_suites = sum(1 for r in results.values() if r.status == TestStatus.SKIPPED)
-        
+        skipped_suites = sum(
+            1 for r in results.values() if r.status == TestStatus.SKIPPED
+        )
+
         success_rate = (passed_suites / total_suites * 100) if total_suites > 0 else 0
         total_duration = sum(r.duration for r in results.values())
-        
+
         return {
-            'total_suites': total_suites,
-            'passed_suites': passed_suites,
-            'failed_suites': failed_suites,
-            'error_suites': error_suites,
-            'skipped_suites': skipped_suites,
-            'success_rate': success_rate,
-            'total_duration': total_duration
+            "total_suites": total_suites,
+            "passed_suites": passed_suites,
+            "failed_suites": failed_suites,
+            "error_suites": error_suites,
+            "skipped_suites": skipped_suites,
+            "success_rate": success_rate,
+            "total_duration": total_duration,
         }

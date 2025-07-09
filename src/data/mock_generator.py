@@ -6,7 +6,7 @@ various types of market data patterns for testing and backtesting.
 """
 
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import random
 import math
 from dataclasses import dataclass

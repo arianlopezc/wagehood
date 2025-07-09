@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Wagehood Production Real-time Service Launcher
+Wagehood Production Real-time Signal Analysis Service Launcher
 """
 
 import asyncio
@@ -11,7 +11,7 @@ from datetime import datetime
 
 from src.realtime.data_ingestion import create_ingestion_service
 from src.realtime.config_manager import ConfigManager
-from src.realtime.calculation_engine import CalculationEngine
+from src.realtime.calculation_engine import SignalDetectionEngine
 from src.jobs.job_processor import JobProcessor
 
 # Configure logging
@@ -27,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ProductionService:
-    """Production real-time trading service."""
+    """Production real-time signal analysis service."""
     
     def __init__(self):
         self.config = None
@@ -39,7 +39,7 @@ class ProductionService:
     async def initialize(self):
         """Initialize all service components."""
         try:
-            logger.info("🚀 Initializing Wagehood Production Service")
+            logger.info("🚀 Initializing Wagehood Production Signal Analysis Service")
             
             # Initialize configuration
             self.config = ConfigManager()
@@ -50,7 +50,7 @@ class ProductionService:
             logger.info("✅ Data ingestion service created")
             
             # Create calculation engine
-            self.calc_engine = CalculationEngine(self.config, self.ingestion_service)
+            self.calc_engine = SignalDetectionEngine(self.config, self.ingestion_service)
             logger.info("✅ Calculation engine initialized")
             
             # Create job processor
@@ -123,7 +123,7 @@ async def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     # Start service
-    logger.info(f"🎯 Wagehood Production Service - {datetime.now()}")
+    logger.info(f"🎯 Wagehood Production Signal Analysis Service - {datetime.now()}")
     success = await service.start()
     
     return 0 if success else 1

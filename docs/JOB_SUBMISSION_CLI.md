@@ -1,13 +1,13 @@
 # Job Submission CLI Documentation
 
-The Wagehood Job Submission CLI allows you to submit backtest jobs to the running production instance, monitor their progress in real-time, and view detailed results including all signals and trades.
+The Wagehood Job Submission CLI allows you to submit signal analysis jobs to the running production instance, monitor their progress in real-time, and view detailed results including all signals and analysis metrics.
 
 ## Overview
 
-The CLI provides a single command that handles the entire backtest workflow:
-1. **Submit** a backtest job to the production instance
+The CLI provides a single command that handles the entire signal analysis workflow:
+1. **Submit** a signal analysis job to the production instance
 2. **Monitor** job progress with real-time updates
-3. **Display** comprehensive results with all signals and trades
+3. **Display** comprehensive results with all signals and analysis metrics
 
 ## Prerequisites
 
@@ -38,9 +38,9 @@ python submit_job.py --symbol SYMBOL --timeframe TIMEFRAME --strategy STRATEGY \
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| `--symbol` | Trading symbol to analyze | `AAPL`, `SPY`, `MSFT` |
+| `--symbol` | Symbol to analyze for signals | `AAPL`, `SPY`, `MSFT` |
 | `--timeframe` | Analysis timeframe | `1h`, `1d`, `5m` |
-| `--strategy` | Trading strategy to test | `macd_rsi`, `rsi_trend` |
+| `--strategy` | Signal detection strategy to test | `macd_rsi`, `rsi_trend` |
 | `--start` | Start date (YYYY-MM-DD) | `2024-01-01` |
 | `--end` | End date (YYYY-MM-DD) | `2024-12-31` |
 
@@ -53,13 +53,13 @@ python submit_job.py --symbol SYMBOL --timeframe TIMEFRAME --strategy STRATEGY \
 
 ## Available Strategies
 
-| Strategy | Key | Best For | Win Rate | Description |
-|----------|-----|----------|----------|-------------|
-| **MACD + RSI Combined** | `macd_rsi` | Swing Trading | ~73% | Momentum strategy combining MACD and RSI |
-| **RSI Trend Following** | `rsi_trend` | Day Trading | ~68% | Trend-aware RSI with pullbacks |
-| **Bollinger Band Breakout** | `bollinger_breakout` | Volatility Trading | ~65% | Volatility expansion strategy |
-| **Support/Resistance Breakout** | `sr_breakout` | Breakout Trading | ~58% | Level-based breakout trading |
-| **Moving Average Crossover** | `ma_crossover` | Position Trading | ~45% | Golden/Death cross signals |
+| Strategy | Key | Best For | Signal Type | Description |
+|----------|-----|----------|-------------|-------------|
+| **MACD + RSI Combined** | `macd_rsi` | Medium-term Analysis | Momentum | Momentum strategy combining MACD and RSI |
+| **RSI Trend Following** | `rsi_trend` | Short-term Analysis | Trend-aware | Trend-aware RSI with pullbacks |
+| **Bollinger Band Breakout** | `bollinger_breakout` | Volatility Analysis | Volatility | Volatility expansion strategy |
+| **Support/Resistance Breakout** | `sr_breakout` | Breakout Analysis | Level-based | Level-based breakout trading |
+| **Moving Average Crossover** | `ma_crossover` | Long-term Analysis | Crossover | Golden/Death cross signals |
 
 ## Available Timeframes
 
@@ -130,7 +130,7 @@ Period: 2024-01-01 to 2024-12-31
 ### 3. Performance Summary
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 BACKTEST RESULTS
+📈 SIGNAL ANALYSIS RESULTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Symbol: AAPL
 Timeframe: 1h
@@ -138,16 +138,16 @@ Strategy: macd_rsi
 Period: 2024-01-01 to 2024-12-31
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📊 PERFORMANCE SUMMARY
+📊 SIGNAL ANALYSIS SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Total Return:     +15.42%
-Win Rate:          68.2%
-Sharpe Ratio:       1.85
-Max Drawdown:      -8.30%
-Profit Factor:      2.14
-Total Trades:        127
-Winning Trades:       87
-Losing Trades:        40
+Total Signals:         254
+Buy Signals:           127
+Sell Signals:          127
+Average Confidence:    0.72
+Signal Frequency:      0.7/day
+High Confidence:       89 (35%)
+Medium Confidence:     132 (52%)
+Low Confidence:        33 (13%)
 ```
 
 ### 4. Signals Summary
@@ -174,14 +174,18 @@ Date         Type Price      Confidence Strategy
 
 ### 6. All Trades Details
 ```
-💰 ALL TRADES
+📈 SIGNAL QUALITY ANALYSIS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Entry Date   Exit Date    Side Entry $   Exit $    P&L       P&L %
+Confidence Distribution and Signal Quality Metrics
 ────────────────────────────────────────────────────────────────────────────
-2024-01-15   2024-01-22   BUY  $185.23   $192.45   +722.00   +3.9%
-2024-02-05   2024-02-18   BUY  $188.12   $195.33   +721.00   +3.8%
-2024-03-01   2024-03-08   BUY  $190.45   $187.20   -325.00   -1.7%
-...
+High Confidence (0.8-1.0):        89 signals (35%)
+Medium Confidence (0.5-0.8):      132 signals (52%)
+Low Confidence (0.3-0.5):         33 signals (13%)
+
+Peak Signal Hours: 9:30-11:00 AM, 2:00-3:30 PM
+Average Signal Duration: 2.3 hours
+MACD Component Strength: 0.74
+RSI Component Strength: 0.68
 ```
 
 ## Technical Details
@@ -196,7 +200,7 @@ Entry Date   Exit Date    Side Entry $   Exit $    P&L       P&L %
 1. CLI submits job to `jobs_stream`
 2. Production service picks up job
 3. Fetches historical data from Alpaca
-4. Runs backtest using existing engine
+4. Runs signal analysis using existing engine
 5. Stores results in Redis
 6. CLI polls status and displays results
 
@@ -269,7 +273,7 @@ The CLI connects to the same Redis instance used by the production service:
 Jobs use the same data sources as the production system:
 - **Live Market Data**: Alpaca Markets API
 - **Historical Data**: Alpaca Markets historical API
-- **Strategies**: Same strategy implementations
+- **Strategies**: Same signal detection strategy implementations
 - **Indicators**: Same technical indicator calculations
 
 ### Resource Usage
@@ -307,20 +311,20 @@ redis-cli -h localhost -p 6380 HGETALL job:result:JOB_ID
 ## Best Practices
 
 ### Strategy Selection
-1. **Day Trading**: Use `rsi_trend` or `bollinger_breakout` with short timeframes
-2. **Swing Trading**: Use `macd_rsi` with 1h-4h timeframes
-3. **Position Trading**: Use `ma_crossover` or `sr_breakout` with daily timeframes
+1. **Short-term Analysis**: Use `rsi_trend` or `bollinger_breakout` with short timeframes
+2. **Medium-term Analysis**: Use `macd_rsi` with 1h-4h timeframes
+3. **Long-term Analysis**: Use `ma_crossover` or `sr_breakout` with daily timeframes
 
 ### Date Range Selection
 1. **Testing Period**: Use recent 1-2 years for relevance
 2. **Validation Period**: Test on different market conditions
 3. **Development**: Start with shorter periods for faster iteration
 
-### Performance Analysis
-1. **Win Rate**: Look for >60% for reliable strategies
-2. **Sharpe Ratio**: Target >1.0 for risk-adjusted returns
-3. **Max Drawdown**: Keep <20% for manageable risk
-4. **Trade Count**: Ensure sufficient sample size (>30 trades)
+### Signal Quality Analysis
+1. **Average Confidence**: Look for >0.6 for reliable signal quality
+2. **Signal Distribution**: Ensure balanced buy/sell signal generation
+3. **Confidence Distribution**: Target >30% high-confidence signals
+4. **Signal Count**: Ensure sufficient sample size (>50 signals)
 
 ## Advanced Usage
 
@@ -373,4 +377,4 @@ For issues or questions:
 3. Review job status in Redis: `redis-cli -h localhost -p 6380 XLEN jobs_stream`
 4. Check system resources: `docker stats wagehood-trading`
 
-The Job Submission CLI provides a powerful interface for backtesting strategies against historical data using the same production-grade infrastructure that powers real-time trading analysis.
+The Job Submission CLI provides a powerful interface for signal analysis against historical data using the same production-grade infrastructure that powers real-time signal detection and analysis.

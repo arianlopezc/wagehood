@@ -2,9 +2,9 @@
 Market Data Ingestion Service
 
 This module provides real-time market data ingestion using Redis Streams
-for high-performance event-driven data processing. It fetches market data
+for high-performance event-driven signal detection. It fetches market data
 from various providers and publishes to Redis Streams for consumption by
-calculation engines.
+signal detection engines and Discord notification services.
 """
 
 import asyncio
@@ -253,8 +253,8 @@ class MarketDataIngestionService:
     High-performance market data ingestion service using Redis Streams.
 
     This service fetches real-time market data from configured providers
-    and publishes events to Redis Streams for consumption by calculation
-    engines and other downstream services.
+    and publishes events to Redis Streams for consumption by signal
+    detection engines and Discord notification services.
     """
 
     def __init__(self, config_manager: ConfigManager):
@@ -280,20 +280,20 @@ class MarketDataIngestionService:
             "market_data": StreamConfig(
                 stream_name="market_data_stream",
                 max_len=10000,
-                consumer_group="data_processors",
+                consumer_group="signal_processors",
                 consumer_name="ingestion_service",
             ),
-            "calculation_events": StreamConfig(
-                stream_name="calculation_events_stream",
+            "signal_events": StreamConfig(
+                stream_name="signal_events_stream",
                 max_len=5000,
-                consumer_group="calculation_consumers",
-                consumer_name="calc_engine",
+                consumer_group="signal_consumers",
+                consumer_name="signal_engine",
             ),
-            "alerts": StreamConfig(
-                stream_name="alert_stream",
+            "discord_notifications": StreamConfig(
+                stream_name="discord_notifications_stream",
                 max_len=1000,
-                consumer_group="alert_processors",
-                consumer_name="alert_service",
+                consumer_group="notification_processors",
+                consumer_name="discord_service",
             ),
         }
 
@@ -1032,25 +1032,23 @@ class MarketDataIngestionService:
         except Exception as e:
             return {"error": str(e)}
 
-    async def publish_calculation_event(
-        self, symbol: str, calculation_results: Dict[str, Any]
-    ):
+    async def publish_signal_event(self, symbol: str, signal_results: Dict[str, Any]):
         """
-        Publish calculation results to the calculation events stream.
+        Publish signal detection results to the signal events stream.
 
         Args:
             symbol: Trading symbol
-            calculation_results: Dictionary with calculation results
+            signal_results: Dictionary with signal detection results
         """
         try:
             event_data = {
-                "event_id": f"calc_{symbol}_{int(time.time() * 1000)}",
+                "event_id": f"signal_{symbol}_{int(time.time() * 1000)}",
                 "symbol": symbol,
                 "timestamp": datetime.now().isoformat(),
-                "results": json.dumps(calculation_results),
+                "results": json.dumps(signal_results),
             }
 
-            stream_config = self.streams["calculation_events"]
+            stream_config = self.streams["signal_events"]
             message_id = self._redis_client.xadd(
                 stream_config.stream_name,
                 event_data,
@@ -1058,38 +1056,38 @@ class MarketDataIngestionService:
                 approximate=True,
             )
 
-            logger.debug(f"Published calculation event for {symbol}: {message_id}")
+            logger.debug(f"Published signal event for {symbol}: {message_id}")
 
         except Exception as e:
-            logger.error(f"Failed to publish calculation event for {symbol}: {e}")
+            logger.error(f"Failed to publish signal event for {symbol}: {e}")
 
-    async def publish_alert(
+    async def publish_discord_notification(
         self,
-        alert_type: str,
+        notification_type: str,
         symbol: str,
-        message: str,
+        signal_data: Dict[str, Any],
         metadata: Dict[str, Any] = None,
     ):
         """
-        Publish alert to the alert stream.
+        Publish Discord notification to the notification stream.
 
         Args:
-            alert_type: Type of alert (signal, error, warning)
+            notification_type: Type of notification (signal, system, error)
             symbol: Trading symbol
-            message: Alert message
+            signal_data: Signal data for Discord notification
             metadata: Additional metadata
         """
         try:
             event_data = {
-                "event_id": f"alert_{alert_type}_{int(time.time() * 1000)}",
-                "type": alert_type,
+                "event_id": f"discord_{notification_type}_{int(time.time() * 1000)}",
+                "type": notification_type,
                 "symbol": symbol,
-                "message": message,
+                "signal_data": json.dumps(signal_data),
                 "timestamp": datetime.now().isoformat(),
                 "metadata": json.dumps(metadata or {}),
             }
 
-            stream_config = self.streams["alerts"]
+            stream_config = self.streams["discord_notifications"]
             message_id = self._redis_client.xadd(
                 stream_config.stream_name,
                 event_data,
@@ -1097,10 +1095,12 @@ class MarketDataIngestionService:
                 approximate=True,
             )
 
-            logger.info(f"Published alert [{alert_type}] for {symbol}: {message}")
+            logger.info(
+                f"Published Discord notification [{notification_type}] for {symbol}"
+            )
 
         except Exception as e:
-            logger.error(f"Failed to publish alert: {e}")
+            logger.error(f"Failed to publish Discord notification: {e}")
 
     def get_latest_price(self, symbol: str) -> Optional[float]:
         """

@@ -5,13 +5,13 @@ from .test_data import (
     PrecisionTestVectors,
     EdgeCaseTestData,
     ValidationHelpers,
-    TEST_CONFIG
+    TEST_CONFIG,
 )
 
 __all__ = [
-    'TestDataGenerator',
-    'PrecisionTestVectors',
-    'EdgeCaseTestData',
-    'ValidationHelpers',
-    'TEST_CONFIG'
+    "TestDataGenerator",
+    "PrecisionTestVectors",
+    "EdgeCaseTestData",
+    "ValidationHelpers",
+    "TEST_CONFIG",
 ]

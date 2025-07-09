@@ -1,0 +1,73 @@
+{
+  "moving_averages": {
+    "sma_10_max_error": 1.1368683772161603e-13,
+    "sma_10_passed": true,
+    "ema_10_mathematical_consistent": true,
+    "ema_10_passed": true,
+    "ema_10_init_error": 0.0,
+    "ema_10_init_correct": true,
+    "sma_20_max_error": 1.1368683772161603e-13,
+    "sma_20_passed": true,
+    "ema_20_mathematical_consistent": true,
+    "ema_20_passed": true,
+    "ema_20_init_error": 0.0,
+    "ema_20_init_correct": true,
+    "sma_50_max_error": 1.1368683772161603e-13,
+    "sma_50_passed": true,
+    "ema_50_mathematical_consistent": true,
+    "ema_50_passed": true,
+    "ema_50_init_error": 0.0,
+    "ema_50_init_correct": true,
+    "crossover_count": 40,
+    "crossover_logic_passed": true
+  },
+  "rsi": {
+    "rsi_max_error": 0.0,
+    "rsi_passed": true,
+    "rsi_bounded": true,
+    "rsi_min": 23.58454406052219,
+    "rsi_max": 89.09431993910604
+  },
+  "macd": {
+    "macd_line_max_error": 0.0,
+    "macd_line_passed": true,
+    "signal_line_max_error": 0.0,
+    "signal_line_passed": true,
+    "histogram_max_error": 0.0,
+    "histogram_passed": true
+  },
+  "bollinger_bands": {
+    "bb_upper_max_error": 0.0,
+    "bb_upper_passed": true,
+    "bb_middle_max_error": 0.0,
+    "bb_middle_passed": true,
+    "bb_lower_max_error": 0.0,
+    "bb_lower_passed": true,
+    "bb_relationships_correct": true
+  },
+  "atr": {
+    "atr_max_error": 0.0,
+    "atr_passed": true,
+    "atr_positive": true
+  },
+  "strategy_signals": {
+    "MovingAverageCrossover_signals_count": 0,
+    "MovingAverageCrossover_passed": true,
+    "RSITrendFollowing_signals_count": 0,
+    "RSITrendFollowing_passed": true,
+    "BollingerBandBreakout_signals_count": 0,
+    "BollingerBandBreakout_passed": true,
+    "MACDRSIStrategy_signals_count": 0,
+    "MACDRSIStrategy_passed": true,
+    "SupportResistanceBreakout_signals_count": 30,
+    "SupportResistanceBreakout_passed": true,
+    "SupportResistanceBreakout_avg_confidence": 0.958815323565786,
+    "SupportResistanceBreakout_confidence_valid": true
+  },
+  "edge_cases": {
+    "insufficient_data_rsi": false,
+    "nan_handling_sma": true,
+    "zero_handling_rsi": true,
+    "extreme_values_sma": true
+  }
+}

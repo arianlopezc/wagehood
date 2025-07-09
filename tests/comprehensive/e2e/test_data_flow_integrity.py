@@ -20,10 +20,10 @@ from collections import defaultdict, deque
 import threading
 
 from src.realtime.data_ingestion import MarketDataIngestionService
-from src.realtime.calculation_engine import CalculationEngine
+from src.realtime.calculation_engine import SignalDetectionEngine
 from src.realtime.signal_engine import SignalEngine
 from src.realtime.timeframe_manager import TimeframeManager
-from src.realtime.config_manager import ConfigManager, TradingProfile, AssetConfig
+from src.realtime.config_manager import ConfigManager, SignalProfile, AssetConfig
 from src.core.models import OHLCV, TimeFrame
 
 logger = logging.getLogger(__name__)

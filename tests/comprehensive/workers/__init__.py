@@ -13,35 +13,35 @@ WORKER_HEALTH_CHECK_INTERVAL = 1.0  # seconds
 
 # Test worker configurations
 WORKER_TEST_CONFIG = {
-    'calculation_engine': {
-        'max_memory_mb': 512,
-        'max_cpu_percent': 80,
-        'max_processing_time': 5.0,
-        'batch_size': 1000
+    "calculation_engine": {
+        "max_memory_mb": 512,
+        "max_cpu_percent": 80,
+        "max_processing_time": 5.0,
+        "batch_size": 1000,
     },
-    'data_ingestion': {
-        'max_memory_mb': 256,
-        'max_cpu_percent': 60,
-        'max_latency_ms': 500,
-        'throughput_min': 100  # messages per second
+    "data_ingestion": {
+        "max_memory_mb": 256,
+        "max_cpu_percent": 60,
+        "max_latency_ms": 500,
+        "throughput_min": 100,  # messages per second
     },
-    'signal_engine': {
-        'max_memory_mb': 256,
-        'max_cpu_percent': 70,
-        'max_processing_time': 2.0,
-        'accuracy_threshold': 0.95
+    "signal_engine": {
+        "max_memory_mb": 256,
+        "max_cpu_percent": 70,
+        "max_processing_time": 2.0,
+        "accuracy_threshold": 0.95,
     },
-    'stream_processor': {
-        'max_memory_mb': 512,
-        'max_cpu_percent': 75,
-        'max_latency_ms': 100,
-        'throughput_min': 500  # messages per second
-    }
+    "stream_processor": {
+        "max_memory_mb": 512,
+        "max_cpu_percent": 75,
+        "max_latency_ms": 100,
+        "throughput_min": 500,  # messages per second
+    },
 }
 
 # Worker communication patterns
 WORKER_COMMUNICATION = {
-    'queue_patterns': ['request_response', 'publish_subscribe', 'work_queue'],
-    'message_formats': ['json', 'binary', 'protobuf'],
-    'retry_policies': ['exponential_backoff', 'linear_backoff', 'fixed_interval']
+    "queue_patterns": ["request_response", "publish_subscribe", "work_queue"],
+    "message_formats": ["json", "binary", "protobuf"],
+    "retry_policies": ["exponential_backoff", "linear_backoff", "fixed_interval"],
 }

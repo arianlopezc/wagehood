@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
 """
-Wagehood Backtest Job Submission CLI
+Wagehood Signal Analysis Job Submission CLI
 
-This CLI submits backtest jobs to the running production instance,
-monitors their progress, and displays results including all signals and trades.
+This CLI submits signal analysis jobs to the running production instance,
+monitors their progress, and displays comprehensive signal analysis results.
 
-Usage:
+RECOMMENDED USAGE:
+    The best approach is to run this script from inside the Docker container:
+    
+    docker exec -it wagehood-trading python submit_job.py \
+        --symbol AAPL --timeframe 1h --strategy macd_rsi \
+        --start 2024-01-01 --end 2024-12-31 --redis-port 6379
+
+    This ensures proper Redis connectivity and avoids port mapping issues.
+
+ALTERNATIVE USAGE (from host machine):
+    If you have Redis installed locally and port 6380 is properly mapped:
+    
     python submit_job.py --symbol AAPL --timeframe 1h --strategy macd_rsi \
                         --start 2024-01-01 --end 2024-12-31
 
 Features:
     - Single command that handles submission, monitoring, and results
     - Real-time progress updates with visual progress bar
-    - Detailed results including all signals and trades
+    - Detailed signal analysis results with quality metrics
+    - Signal confidence distribution and timing analysis
     - Connects to running Docker production instance via Redis
 """
 
@@ -33,7 +45,7 @@ except ImportError:
 
 
 class JobSubmissionCLI:
-    """CLI for submitting and monitoring backtest jobs."""
+    """CLI for submitting and monitoring signal analysis jobs."""
     
     def __init__(self, redis_host: str = "localhost", redis_port: int = 6380):
         """
@@ -46,6 +58,10 @@ class JobSubmissionCLI:
         if not REDIS_AVAILABLE:
             print("❌ Error: Redis package required. Install with: pip install redis")
             sys.exit(1)
+        
+        # Check environment variables for Redis configuration
+        redis_host = os.getenv('REDIS_HOST', redis_host)
+        redis_port = int(os.getenv('REDIS_PORT', redis_port))
         
         try:
             self.redis_client = redis.Redis(
@@ -64,7 +80,7 @@ class JobSubmissionCLI:
     
     def create_job(self, symbol: str, timeframe: str, strategy: str, 
                    start_date: str, end_date: str) -> Dict[str, Any]:
-        """Create a new backtest job."""
+        """Create a new signal analysis job."""
         # Generate unique job ID
         job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         
@@ -81,7 +97,7 @@ class JobSubmissionCLI:
         # Create job data
         job_data = {
             "job_id": job_id,
-            "type": "backtest",
+            "type": "signal_analysis",
             "params": json.dumps({
                 "symbol": symbol.upper(),
                 "timeframe": timeframe,
@@ -141,11 +157,11 @@ class JobSubmissionCLI:
             
             # Check if completed
             if status == "completed":
-                print("✅ Job completed successfully!")
+                print("✅ Signal analysis completed successfully!")
                 return self._get_job_result(job_id)
             elif status == "failed":
                 error = status_data.get("error", "Unknown error")
-                print(f"❌ Job failed: {error}")
+                print(f"❌ Signal analysis failed: {error}")
                 return None
             
             # Wait before next check
@@ -183,7 +199,7 @@ class JobSubmissionCLI:
         return result_data
     
     def display_results(self, results: Dict[str, Any]):
-        """Display formatted backtest results."""
+        """Display formatted signal analysis results."""
         if not results:
             return
         
@@ -194,23 +210,40 @@ class JobSubmissionCLI:
         start_date = results.get("start_date", "")
         end_date = results.get("end_date", "")
         
-        # Performance metrics
-        total_return_pct = float(results.get("total_return_pct", "0"))
-        win_rate = float(results.get("win_rate", "0"))
-        sharpe_ratio = float(results.get("sharpe_ratio", "0"))
-        max_drawdown_pct = float(results.get("max_drawdown_pct", "0"))
-        total_trades = int(results.get("total_trades", "0"))
-        winning_trades = int(results.get("winning_trades", "0"))
-        losing_trades = int(results.get("losing_trades", "0"))
-        profit_factor = float(results.get("profit_factor", "0"))
-        
-        # Parse trades and signals
-        trades_data = json.loads(results.get("trades", "[]"))
+        # Parse signal data
         signals_data = json.loads(results.get("signals", "[]"))
+        
+        # Signal analysis metrics
+        total_signals = len(signals_data)
+        buy_signals = sum(1 for s in signals_data if s["type"] == "BUY")
+        sell_signals = sum(1 for s in signals_data if s["type"] == "SELL")
+        hold_signals = sum(1 for s in signals_data if s["type"] == "HOLD")
+        
+        # Calculate confidence statistics
+        confidences = [float(s["confidence"]) for s in signals_data if s["confidence"] is not None]
+        if confidences:
+            avg_confidence = sum(confidences) / len(confidences)
+            min_confidence = min(confidences)
+            max_confidence = max(confidences)
+            high_confidence_signals = sum(1 for c in confidences if c >= 0.7)
+            medium_confidence_signals = sum(1 for c in confidences if 0.4 <= c < 0.7)
+            low_confidence_signals = sum(1 for c in confidences if c < 0.4)
+        else:
+            avg_confidence = min_confidence = max_confidence = 0
+            high_confidence_signals = medium_confidence_signals = low_confidence_signals = 0
+        
+        # Calculate signal frequency (signals per day)
+        if total_signals > 0 and start_date and end_date:
+            start_dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+            days = (end_dt - start_dt).days + 1
+            signals_per_day = total_signals / days if days > 0 else 0
+        else:
+            signals_per_day = 0
         
         # Display header
         print("\n" + "━" * 80)
-        print(f"📈 BACKTEST RESULTS")
+        print(f"🎯 SIGNAL ANALYSIS RESULTS")
         print("━" * 80)
         print(f"Symbol: {symbol}")
         print(f"Timeframe: {timeframe}")
@@ -218,77 +251,134 @@ class JobSubmissionCLI:
         print(f"Period: {start_date} to {end_date}")
         print("━" * 80)
         
-        # Performance summary
-        print(f"📊 PERFORMANCE SUMMARY")
+        # Signal summary
+        print(f"📊 SIGNAL SUMMARY")
         print("━" * 80)
-        print(f"Total Return:     {total_return_pct:+8.2f}%")
-        print(f"Win Rate:         {win_rate:8.1f}%")
-        print(f"Sharpe Ratio:     {sharpe_ratio:8.2f}")
-        print(f"Max Drawdown:     {max_drawdown_pct:8.2f}%")
-        print(f"Profit Factor:    {profit_factor:8.2f}")
-        print(f"Total Trades:     {total_trades:8}")
-        print(f"Winning Trades:   {winning_trades:8}")
-        print(f"Losing Trades:    {losing_trades:8}")
+        print(f"Total Signals:    {total_signals:8}")
+        print(f"Buy Signals:      {buy_signals:8} ({buy_signals/total_signals*100:.1f}%)" if total_signals > 0 else "Buy Signals:      0")
+        print(f"Sell Signals:     {sell_signals:8} ({sell_signals/total_signals*100:.1f}%)" if total_signals > 0 else "Sell Signals:     0")
+        print(f"Hold Signals:     {hold_signals:8} ({hold_signals/total_signals*100:.1f}%)" if total_signals > 0 else "Hold Signals:     0")
+        print(f"Avg Frequency:    {signals_per_day:8.2f} signals/day")
         
-        # Signals summary
-        print(f"\n🎯 SIGNALS SUMMARY")
+        # Confidence analysis
+        print(f"\n🔍 CONFIDENCE ANALYSIS")
         print("━" * 80)
-        print(f"Total Signals:    {len(signals_data):8}")
+        print(f"Average Confidence: {avg_confidence:6.2f}")
+        print(f"Min Confidence:     {min_confidence:6.2f}")
+        print(f"Max Confidence:     {max_confidence:6.2f}")
+        print(f"High Confidence:    {high_confidence_signals:8} (≥0.70)")
+        print(f"Medium Confidence:  {medium_confidence_signals:8} (0.40-0.69)")
+        print(f"Low Confidence:     {low_confidence_signals:8} (<0.40)")
         
-        # Count signal types
-        buy_signals = sum(1 for s in signals_data if s["type"] == "BUY")
-        sell_signals = sum(1 for s in signals_data if s["type"] == "SELL")
+        # Signal quality assessment
+        print(f"\n⭐ SIGNAL QUALITY ASSESSMENT")
+        print("━" * 80)
+        if total_signals > 0:
+            quality_score = (high_confidence_signals * 3 + medium_confidence_signals * 2 + low_confidence_signals * 1) / total_signals
+            print(f"Quality Score:      {quality_score:6.2f}/3.0")
+            
+            if quality_score >= 2.5:
+                quality_rating = "Excellent"
+            elif quality_score >= 2.0:
+                quality_rating = "Good"
+            elif quality_score >= 1.5:
+                quality_rating = "Fair"
+            else:
+                quality_rating = "Poor"
+            
+            print(f"Quality Rating:     {quality_rating}")
+            
+            # Signal consistency check
+            if signals_per_day > 0:
+                if signals_per_day > 10:
+                    consistency_rating = "High Activity"
+                elif signals_per_day > 2:
+                    consistency_rating = "Moderate Activity"
+                elif signals_per_day > 0.5:
+                    consistency_rating = "Low Activity"
+                else:
+                    consistency_rating = "Very Low Activity"
+                
+                print(f"Activity Level:     {consistency_rating}")
+        else:
+            print("Quality Score:      N/A (No signals)")
+            print("Quality Rating:     N/A")
+            print("Activity Level:     N/A")
         
-        print(f"Buy Signals:      {buy_signals:8}")
-        print(f"Sell Signals:     {sell_signals:8}")
-        
-        # Display all signals
+        # Display detailed signals
         if signals_data:
-            print(f"\n📋 ALL SIGNALS")
+            print(f"\n📋 DETAILED SIGNAL ANALYSIS")
             print("━" * 80)
-            print(f"{'Date':<12} {'Type':<4} {'Price':<10} {'Confidence':<10} {'Strategy'}")
+            print(f"{'Date':<12} {'Time':<8} {'Type':<6} {'Price':<10} {'Conf':<6} {'Strategy':<15} {'Context'}")
             print("─" * 80)
             
             for signal in signals_data[:50]:  # Limit to first 50 signals
-                date = signal["timestamp"][:10]  # Extract date
+                timestamp = signal["timestamp"]
+                date = timestamp[:10]  # Extract date
+                time_str = timestamp[11:19]  # Extract time
                 signal_type = signal["type"]
                 price = float(signal["price"])
-                confidence = float(signal["confidence"])
+                confidence = float(signal["confidence"]) if signal["confidence"] is not None else 0
                 strategy_name = signal["strategy"]
                 
-                print(f"{date:<12} {signal_type:<4} ${price:<9.2f} {confidence:<9.2f} {strategy_name}")
+                # Extract context from metadata if available
+                metadata = signal.get("metadata", {})
+                context = ""
+                if isinstance(metadata, dict):
+                    if "trend" in metadata:
+                        context += f"Trend: {metadata['trend']} "
+                    if "rsi" in metadata:
+                        context += f"RSI: {metadata['rsi']:.1f} "
+                    if "macd" in metadata:
+                        context += f"MACD: {metadata['macd']:.3f} "
+                
+                print(f"{date:<12} {time_str:<8} {signal_type:<6} ${price:<9.2f} {confidence:<5.2f} {strategy_name:<15} {context}")
             
             if len(signals_data) > 50:
                 print(f"... and {len(signals_data) - 50} more signals")
         
-        # Display all trades
-        if trades_data:
-            print(f"\n💰 ALL TRADES")
+        # Signal timing analysis
+        if signals_data:
+            print(f"\n⏰ SIGNAL TIMING ANALYSIS")
             print("━" * 80)
-            print(f"{'Entry Date':<12} {'Exit Date':<12} {'Side':<4} {'Entry $':<10} {'Exit $':<10} {'P&L':<10} {'P&L %':<8}")
-            print("─" * 80)
             
-            for trade in trades_data:
-                entry_date = trade["entry_date"][:10]
-                exit_date = trade["exit_date"][:10] if trade["exit_date"] else "Open"
-                side = trade["side"]
-                entry_price = float(trade["entry_price"])
-                exit_price = float(trade["exit_price"]) if trade["exit_price"] else 0
-                profit_loss = float(trade["profit_loss"]) if trade["profit_loss"] else 0
-                profit_loss_pct = float(trade["profit_loss_pct"]) if trade["profit_loss_pct"] else 0
+            # Group signals by hour to find patterns
+            hourly_signals = {}
+            for signal in signals_data:
+                timestamp = signal["timestamp"]
+                hour = int(timestamp[11:13])
+                hourly_signals[hour] = hourly_signals.get(hour, 0) + 1
+            
+            # Find most active hours
+            if hourly_signals:
+                sorted_hours = sorted(hourly_signals.items(), key=lambda x: x[1], reverse=True)
+                print(f"Most Active Hours: ", end="")
+                for hour, count in sorted_hours[:3]:
+                    print(f"{hour:02d}:00 ({count} signals) ", end="")
+                print()
+            
+            # Calculate time between signals
+            if len(signals_data) > 1:
+                timestamps = [datetime.fromisoformat(s["timestamp"]) for s in signals_data]
+                timestamps.sort()
                 
-                pnl_color = "+" if profit_loss >= 0 else ""
+                time_diffs = []
+                for i in range(1, len(timestamps)):
+                    diff = (timestamps[i] - timestamps[i-1]).total_seconds() / 3600  # Hours
+                    time_diffs.append(diff)
                 
-                print(f"{entry_date:<12} {exit_date:<12} {side:<4} ${entry_price:<9.2f} ${exit_price:<9.2f} {pnl_color}{profit_loss:<9.2f} {pnl_color}{profit_loss_pct:<7.1f}%")
+                if time_diffs:
+                    avg_time_between = sum(time_diffs) / len(time_diffs)
+                    print(f"Avg Time Between:  {avg_time_between:6.1f} hours")
         
         print("━" * 80)
-        print("🎉 Analysis complete!")
+        print("🎉 Signal analysis complete!")
         print("━" * 80)
     
     def run(self, symbol: str, timeframe: str, strategy: str, 
             start_date: str, end_date: str):
         """Run the complete job submission and monitoring process."""
-        print(f"📊 Submitting backtest job...")
+        print(f"🎯 Submitting signal analysis job...")
         print(f"Symbol: {symbol.upper()}")
         print(f"Timeframe: {timeframe}")
         print(f"Strategy: {strategy}")
@@ -315,35 +405,48 @@ class JobSubmissionCLI:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Submit backtest jobs to Wagehood production instance",
+        description="Submit signal analysis jobs to Wagehood production instance",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic backtest
+  # Basic signal analysis
   python submit_job.py --symbol AAPL --timeframe 1h --strategy macd_rsi \\
                       --start 2024-01-01 --end 2024-12-31
   
-  # Short timeframe day trading
+  # Short timeframe signal detection
   python submit_job.py --symbol SPY --timeframe 5m --strategy rsi_trend \\
                       --start 2024-06-01 --end 2024-06-30
   
-  # Long-term position trading
+  # Long-term signal analysis
   python submit_job.py --symbol QQQ --timeframe 1d --strategy ma_crossover \\
                       --start 2023-01-01 --end 2024-12-31
 
 Available Strategies:
-  - macd_rsi: MACD + RSI Combined (recommended for swing trading)
-  - ma_crossover: Moving Average Crossover (good for position trading)
-  - rsi_trend: RSI Trend Following (good for day trading)
-  - bollinger_breakout: Bollinger Band Breakout (good for volatility)
-  - sr_breakout: Support/Resistance Breakout (good for breakouts)
+  - macd_rsi: MACD + RSI Combined (excellent for trend detection)
+  - ma_crossover: Moving Average Crossover (good for trend reversals)
+  - rsi_trend: RSI Trend Following (good for momentum signals)
+  - bollinger_breakout: Bollinger Band Breakout (good for volatility signals)
+  - sr_breakout: Support/Resistance Breakout (good for breakout signals)
 
 Available Timeframes:
-  - 1m, 5m, 15m, 30m: Day trading timeframes
-  - 1h, 4h: Swing trading timeframes  
-  - 1d, 1w, 1M: Position trading timeframes
+  - 1m, 5m, 15m, 30m: High-frequency signal detection
+  - 1h, 4h: Medium-term signal analysis
+  - 1d, 1w, 1M: Long-term trend signals
 
-Note: This CLI connects to the running Docker production instance on port 6380.
+Signal Analysis Features:
+  - Comprehensive signal quality assessment
+  - Confidence distribution analysis
+  - Signal timing and frequency patterns
+  - Market context and technical indicators
+  - Signal validation and filtering
+
+IMPORTANT: Redis Connection
+  - RECOMMENDED: Run from inside Docker container with --redis-port 6379
+    docker exec -it wagehood-trading python submit_job.py [OPTIONS] --redis-port 6379
+  
+  - ALTERNATIVE: Run from host machine (requires local Redis or port mapping)
+    python submit_job.py [OPTIONS]  # Uses default port 6380
+  
 Make sure the Wagehood container is running before submitting jobs.
         """
     )
@@ -351,7 +454,7 @@ Make sure the Wagehood container is running before submitting jobs.
     parser.add_argument(
         "--symbol", 
         required=True,
-        help="Trading symbol (e.g., AAPL, SPY, MSFT)"
+        help="Symbol for signal analysis (e.g., AAPL, SPY, MSFT)"
     )
     parser.add_argument(
         "--timeframe", 
@@ -363,7 +466,7 @@ Make sure the Wagehood container is running before submitting jobs.
         "--strategy", 
         required=True,
         choices=["macd_rsi", "ma_crossover", "rsi_trend", "bollinger_breakout", "sr_breakout"],
-        help="Trading strategy to test"
+        help="Signal detection strategy to analyze"
     )
     parser.add_argument(
         "--start", 

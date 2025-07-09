@@ -7,12 +7,12 @@ services using Redis Streams and Celery for high-performance financial analysis.
 
 from .config_manager import ConfigManager
 from .data_ingestion import MarketDataIngestionService
-from .calculation_engine import CalculationEngine
+from .calculation_engine import SignalDetectionEngine
 from .stream_processor import StreamProcessor
 
 __all__ = [
-    'ConfigManager',
-    'MarketDataIngestionService', 
-    'CalculationEngine',
-    'StreamProcessor'
+    "ConfigManager",
+    "MarketDataIngestionService",
+    "SignalDetectionEngine",
+    "StreamProcessor",
 ]
