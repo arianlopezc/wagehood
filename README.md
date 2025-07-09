@@ -1,23 +1,23 @@
 # Wagehood Signal Detection System
 
-**A Redis-based worker service for real-time market signal detection with Python API for strategy analysis and market monitoring. Built with data processing and signal detection capabilities.**
+**A distributed signal detection system for real-time market analysis with multi-strategy signal generation and comprehensive analysis capabilities.**
 
 > **⚠️ IMPORTANT DISCLAIMER**: This is a signal detection system only. It does not execute trades or manage portfolios. All signals are for analysis and educational purposes only.
 
 ## 🚀 Overview
 
-Wagehood is a signal detection system for systematic traders and quantitative researchers. It combines signal generation strategies with real-time data processing, providing tools for strategy development, testing, and signal analysis.
+Wagehood is a high-performance signal detection system designed for systematic traders and quantitative researchers. It provides real-time multi-strategy signal analysis across multiple timeframes with advanced filtering and notification capabilities.
 
 ### Key Features
 
-- **5 Signal Detection Strategies** with comprehensive signal analysis capabilities
-- **Redis-Based Worker Service** with real-time market data processing
-- **Python API** - Market analysis and signal monitoring interfaces
-- **Strategy Analysis & Optimization** - Analyze which strategies generate the highest quality signals
-- **Strategy Documentation** - Detailed explanations of signal generation logic and parameters
-- **Real-Time Processing** with Redis Streams for event-driven architecture
-- **Alpaca Markets Integration** for historical data and market analysis
-- **Testing Suite** with code coverage tracking
+- **Multi-Strategy Signal Engine** - 5 sophisticated signal detection strategies
+- **Distributed Architecture** - Redis-based worker service with horizontal scaling
+- **Real-Time Processing** - Sub-second signal detection with event-driven architecture
+- **Multi-Timeframe Analysis** - Simultaneous analysis across 9 timeframes
+- **Advanced Filtering** - Strategy-specific timeframe mapping and confidence scoring
+- **Multi-Channel Notifications** - Discord integration with strategy-specific routing
+- **Comprehensive Analysis** - Signal quality assessment and performance metrics
+- **Production-Ready** - Docker deployment with health checks and monitoring
 
 ## 🎯 Core Trading Strategies
 
@@ -77,40 +77,45 @@ The system supports multi-dimensional signal analysis across:
 
 ## 🏗️ System Architecture
 
+### High-Level Architecture
+
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Market Data     │───▶│ Redis Streams   │───▶│ Worker Service  │
-│ (Alpaca/Mock)   │    │ (Event Bus)     │    │ (run_realtime)  │
+│ Market Data     │───▶│ Redis Streams   │───▶│ Signal Engine   │
+│ (Alpaca/Mock)   │    │ (Event Bus)     │    │ (Multi-Strategy)│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Redis Cache     │◀───│ Calculation     │◀───│ Signal          │
-│ (Results)       │    │ Engine          │    │ Generation      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                      │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Discord         │◀───│ Data Services   │◀───│ Signal Analysis │
-│ Notifications   │    │ & Storage       │    │ & Evaluation    │
+│ Notifications   │◀───│ Analysis Engine │◀───│ Multi-Timeframe │
+│ (Discord/API)   │    │ (Filtering)     │    │ Processor       │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### Core Components
 
-```
-src/
-├── core/               # Data models and constants
-├── data/               # Data management and providers
-│   └── providers/      # Alpaca, mock, and extensible providers
-├── indicators/         # 20+ technical indicator calculations
-├── strategies/         # 5 signal detection strategy implementations  
-├── backtest/           # Signal analysis engine with historical validation
-├── realtime/           # Real-time processing and data ingestion
-├── services/           # Analysis and data services
-├── analysis/          # Signal evaluation and comparison
-└── storage/           # Results storage and caching
+| Component | Responsibility | Key Features |
+|-----------|---------------|--------------|
+| **Data Layer** | Market data ingestion and validation | Alpaca integration, mock data, WebSocket streams |
+| **Signal Engine** | Multi-strategy signal detection | 5 strategies, confidence scoring, real-time processing |
+| **Analysis Engine** | Signal filtering and evaluation | Quality assessment, timeframe alignment, performance metrics |
+| **Notification System** | Multi-channel alert routing | Discord webhooks, strategy-specific channels, rate limiting |
+| **Storage Layer** | Results caching and persistence | Redis streams, indicator caching, historical analysis |
 
-Python API:
-└── src/                   # Main API package structure
+### Distributed Processing
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ Data Ingestion  │    │ Signal Workers  │    │ Analysis Workers│
+│ (Primary)       │    │ (Horizontal     │    │ (Background)    │
+│                 │    │  Scaling)       │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │ Redis Message   │
+                    │ Bus & Cache     │
+                    └─────────────────┘
 ```
 
 ## 📊 Technical Indicators
@@ -246,57 +251,33 @@ print(f"Average Confidence: {result.avg_confidence:.2f}")
 
 ### Quick Start Guide
 
-Follow these steps to get your multi-strategy multi-timeframe signal detection system running:
+**System Initialization:**
+1. **Dependencies**: Install Python packages and Redis server
+2. **Configuration**: Set up environment variables for data providers
+3. **Testing**: Run comprehensive test suite to verify all components
+4. **API Access**: Use Python API for signal analysis and multi-strategy comparison
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-pip install -e .
+**Core Workflow:**
+- **Data Pipeline**: Market data → Redis Streams → Signal Engine
+- **Multi-Strategy Processing**: 5 strategies across 9 timeframes simultaneously
+- **Signal Generation**: Real-time signal detection with confidence scoring
+- **Quality Assessment**: Advanced filtering and signal validation
 
-# 2. Start Redis server
-redis-server
+**Available Strategies:**
+- MACD+RSI Combined Signal Detection
+- RSI Trend Following with Momentum
+- Bollinger Band Breakout Detection
+- Support/Resistance Level Analysis
+- Moving Average Crossover Signals
 
-# 3. Configure environment (copy and edit .env.example)
-cp .env.example .env
-# Edit .env with your settings
+**Setup Steps:**
 
-# 4. Run comprehensive tests to verify setup
-python run_tests.py --all
-
-# 5. Use the Python API for signal analysis
-python -c "
-from src.strategies import create_strategy
-from src.data.mock_generator import MockDataGenerator
-from src.backtest.engine import BacktestEngine
-from src.core.models import MarketData, TimeFrame
-
-# Generate test data
-generator = MockDataGenerator()
-ohlcv_data = generator.generate_realistic_data('SPY', periods=252)
-
-# Create MarketData object
-market_data = MarketData(
-    symbol='SPY',
-    timeframe=TimeFrame.DAILY,
-    data=ohlcv_data,
-    indicators={},
-    last_updated=ohlcv_data[-1].timestamp
-)
-
-# Test a strategy
-strategy = create_strategy('macd_rsi')
-engine = BacktestEngine()
-result = engine.run_backtest(strategy, market_data, initial_capital=10000)
-print(f'MACD+RSI Strategy Result: {result.total_signals} signals, {result.avg_confidence:.2f} avg confidence')
-"
-
-# 6. Explore all available strategies
-python -c "
-from src.strategies import STRATEGY_REGISTRY
-for name, strategy_class in STRATEGY_REGISTRY.items():
-    print(f'{name}: {strategy_class.__doc__ or \"Trading strategy\"}')
-"
-```
+1. **Install dependencies** and set up Python environment
+2. **Start Redis server** for real-time data processing
+3. **Configure environment** variables for data providers
+4. **Run comprehensive tests** to verify all components
+5. **Use Python API** for signal analysis and strategy testing
+6. **Explore strategies** through the strategy registry system
 
 ## 🖥️ Python API Interface
 
@@ -304,362 +285,184 @@ The Wagehood system provides a Python API for multi-strategy multi-timeframe sig
 
 ## 📋 Job Submission CLI
 
-Submit signal analysis jobs to the running production instance and get detailed results with all signals and analysis metrics.
-
-```bash
-# Submit a backtest job
-python submit_job.py --symbol AAPL --timeframe 1h --strategy macd_rsi \
-                    --start 2024-01-01 --end 2024-12-31
-
-# Output includes:
-# - Real-time progress monitoring
-# - Complete performance metrics  
-# - All trading signals generated
-# - Signal quality analysis
-# - Signal frequency and confidence analysis
-```
+**Architecture**: Submit signal analysis jobs to the running production instance and get detailed results with all signals and analysis metrics.
 
 **Key Features:**
-- **Single Command**: Submit, monitor, and view results in one command
+- **Single Command Interface**: Submit, monitor, and view results in one command
 - **Real-time Progress**: Live progress updates with visual progress bar
-- **Comprehensive Results**: All signals, trades, and performance metrics
+- **Comprehensive Results**: All signals, performance metrics, and quality analysis
 - **Production Integration**: Uses running Docker instance for analysis
+- **Multi-Strategy Support**: Run analysis across all 5 available strategies
+- **Multi-Timeframe Analysis**: Simultaneous analysis across 9 timeframes
 
 See [Job Submission CLI Documentation](docs/JOB_SUBMISSION_CLI.md) for complete usage guide.
 
 ### Core Python API
 
-**Strategy Analysis:**
-```python
-from src.strategies import create_strategy, STRATEGY_REGISTRY
-from src.data.mock_generator import MockDataGenerator
-from src.backtest.engine import BacktestEngine
+**Strategy Analysis Architecture:**
+- **Strategy Registry**: Centralized registry of all 5 signal detection strategies
+- **Data Generation**: Mock data generator for testing and validation
+- **Signal Analysis Engine**: Core engine for multi-strategy signal processing
+- **Performance Evaluation**: Comprehensive metrics and quality assessment
 
-# Explore available strategies
-for name, strategy_class in STRATEGY_REGISTRY.items():
-    print(f"{name}: {strategy_class.__doc__ or 'Trading strategy'}")
-
-# Create and test a strategy
-strategy = create_strategy('macd_rsi')
-generator = MockDataGenerator()
-data = generator.generate_realistic_data('SPY', periods=252)
-
-engine = BacktestEngine()
-result = engine.run_backtest(strategy, data, initial_capital=10000)
-print(f"Total Return: {result.performance_metrics.total_return_pct:.2%}")
-```
+**Key Components:**
+- **Multi-Strategy Processing**: Simultaneous analysis across all strategies
+- **Timeframe Management**: Automatic handling of 9 different timeframes
+- **Signal Quality Scoring**: Advanced confidence and reliability metrics
+- **Real-time Processing**: Redis-based event-driven architecture
 
 **Multi-Strategy Comparison:**
-```python
-from src.analysis.comparison import StrategyComparator
-
-# Compare multiple strategies
-comparator = StrategyComparator()
-strategies_to_test = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
-
-results = {}
-for strategy_name in strategies_to_test:
-    strategy = create_strategy(strategy_name)
-    result = engine.run_backtest(strategy, data, initial_capital=10000)
-    results[strategy_name] = result
-
-# Analyze results
-for name, result in results.items():
-    metrics = result.performance_metrics
-    print(f"{name}: {metrics.total_return_pct:.2%} return, {metrics.win_rate:.1%} win rate")
-```
+- **Strategy Comparator**: Advanced comparison engine for multi-strategy analysis
+- **Performance Metrics**: Comprehensive evaluation across all signal quality dimensions
+- **Ranking System**: Automated ranking based on composite scoring algorithms
+- **Quality Assessment**: Signal frequency, confidence, and reliability analysis
 
 **Real-time Data Processing:**
-```python
-from src.realtime.data_ingestion import create_ingestion_service
-from src.realtime.calculation_engine import CalculationEngine
-from src.realtime.config_manager import ConfigManager
-
-# Set up real-time processing (requires Redis)
-config = ConfigManager()
-ingestion_service = create_ingestion_service(config)
-calc_engine = CalculationEngine()
-
-# Configure multi-timeframe analysis
-symbols = ['SPY', 'QQQ', 'AAPL']
-timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
-strategies = ['macd_rsi', 'rsi_trend', 'bollinger_breakout']
-
-# Process real-time signals
-# Note: This requires running Redis server
-```
+- **Data Ingestion Service**: Multi-source data ingestion with Redis Streams
+- **Signal Detection Engine**: Real-time multi-strategy signal processing
+- **Configuration Management**: Dynamic configuration for symbols, timeframes, and strategies
+- **Event-Driven Architecture**: Scalable processing with horizontal worker scaling
 
 ### Testing and Validation
 
-**Testing:**
-```bash
-# Run all tests including strategy validation
-python run_tests.py --all
+**Testing Architecture:**
+- **Comprehensive Test Suite**: Unit, integration, and performance testing
+- **Strategy Validation**: Automated validation of all signal detection strategies
+- **Coverage Analysis**: Code coverage reporting and quality metrics
+- **Performance Benchmarking**: Execution time and resource usage testing
 
-# Run specific test categories
-python run_tests.py --unit
-python run_tests.py --integration
-python run_tests.py --performance
+**Test Categories:**
+- **Unit Tests**: Individual component testing and validation
+- **Integration Tests**: End-to-end system testing with real data flows
+- **Performance Tests**: Throughput, latency, and resource usage validation
+- **Strategy Tests**: Signal generation quality and accuracy validation
 
-# Run tests with coverage
-python run_tests.py --coverage
-```
-
-**Strategy Validation:**
-```python
-# Validate strategy implementations
-python -c "
-from src.strategies import STRATEGY_REGISTRY
-from src.data.mock_generator import MockDataGenerator
-
-generator = MockDataGenerator()
-data = generator.generate_realistic_data('SPY', periods=100)
-
-for name, strategy_class in STRATEGY_REGISTRY.items():
-    try:
-        strategy = strategy_class()
-        signals = strategy.generate_signals(data)
-        print(f'✓ {name}: Generated {len(signals)} signals')
-    except Exception as e:
-        print(f'✗ {name}: Error - {e}')
-"
-```
+**Validation Features:**
+- **Strategy Registry Validation**: Automated testing of all 5 strategies
+- **Signal Quality Assessment**: Comprehensive signal validation and scoring
+- **Data Integrity Checks**: Market data validation and consistency testing
+- **Performance Metrics**: Execution time, memory usage, and throughput analysis
 
 ### Usage Examples
 
 #### Multi-Strategy Portfolio Analysis
-```python
-# Create a multi-strategy analysis
-from src.strategies import DEFAULT_STRATEGY_PARAMS, create_strategy
-from src.data.mock_generator import MockDataGenerator
-from src.backtest.engine import BacktestEngine
-import pandas as pd
 
-# Generate realistic market data
-generator = MockDataGenerator()
-symbols = ['SPY', 'QQQ', 'AAPL', 'MSFT']
-strategies = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
+**Architecture Pattern**: Multi-dimensional analysis across symbols and strategies
 
-# Portfolio analysis
-portfolio_results = {}
-for symbol in symbols:
-    data = generator.generate_realistic_data(symbol, periods=252)
-    symbol_results = {}
-    
-    for strategy_name in strategies:
-        strategy = create_strategy(strategy_name)
-        engine = BacktestEngine()
-        result = engine.run_backtest(strategy, data, initial_capital=10000)
-        
-        symbol_results[strategy_name] = {
-            'total_return': result.performance_metrics.total_return_pct,
-            'win_rate': result.performance_metrics.win_rate,
-            'sharpe_ratio': result.performance_metrics.sharpe_ratio,
-            'max_drawdown': result.performance_metrics.max_drawdown_pct
-        }
-    
-    portfolio_results[symbol] = symbol_results
+**Key Components:**
+- **Data Generation**: Realistic market data simulation for multiple symbols
+- **Strategy Matrix**: Systematic analysis across all 5 available strategies
+- **Performance Aggregation**: Comprehensive metrics collection and comparison
+- **Results Analysis**: Automated ranking and performance evaluation
 
-# Display results
-for symbol, strategies_data in portfolio_results.items():
-    print(f"\n{symbol} Analysis:")
-    for strategy, metrics in strategies_data.items():
-        print(f"  {strategy}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
-```
+**Analysis Dimensions:**
+- **Symbol Analysis**: Multi-symbol portfolio evaluation
+- **Strategy Comparison**: Performance comparison across all strategies
+- **Risk Assessment**: Drawdown, volatility, and risk-adjusted returns
+- **Quality Metrics**: Signal frequency, confidence, and reliability scoring
 
 #### Real-time Signal Generation
-```python
-# Set up real-time multi-timeframe signal generation
-from src.realtime.signal_engine import SignalEngine
-from src.realtime.config_manager import ConfigManager
-from src.core.models import TimeFrame
 
-# Configure signal engine
-config = ConfigManager()
-signal_engine = SignalEngine(config)
+**Architecture Pattern**: Multi-timeframe real-time signal processing
 
-# Configure trading profiles
-day_trading_timeframes = [TimeFrame.MINUTE_1, TimeFrame.MINUTE_5, TimeFrame.MINUTE_15]
-swing_trading_timeframes = [TimeFrame.MINUTE_30, TimeFrame.HOUR_1, TimeFrame.HOUR_4]
-position_trading_timeframes = [TimeFrame.DAILY, TimeFrame.WEEKLY, TimeFrame.MONTHLY]
+**Key Components:**
+- **Signal Engine**: Core real-time signal processing engine
+- **Configuration Manager**: Dynamic configuration for symbols and strategies
+- **Timeframe Profiles**: Pre-configured timeframe sets for different trading styles
+- **Multi-Symbol Processing**: Simultaneous processing across multiple symbols
 
-# Monitor symbols across different timeframes
-symbols = ['SPY', 'QQQ', 'AAPL']
-for symbol in symbols:
-    # Day trading signals
-    day_signals = signal_engine.generate_signals(symbol, day_trading_timeframes, ['rsi_trend', 'bollinger_breakout'])
-    
-    # Swing trading signals  
-    swing_signals = signal_engine.generate_signals(symbol, swing_trading_timeframes, ['macd_rsi', 'rsi_trend'])
-    
-    # Position trading signals
-    position_signals = signal_engine.generate_signals(symbol, position_trading_timeframes, ['ma_crossover'])
-    
-    print(f"{symbol}: Day: {len(day_signals)}, Swing: {len(swing_signals)}, Position: {len(position_signals)} signals")
-```
+**Trading Profiles:**
+- **Day Trading**: 1m, 5m, 15m timeframes with high-frequency strategies
+- **Swing Trading**: 30m, 1h, 4h timeframes with medium-term strategies
+- **Position Trading**: 1d, 1w, 1M timeframes with long-term strategies
+
+**Signal Processing:**
+- **Real-time Data Ingestion**: Continuous market data processing
+- **Multi-Strategy Execution**: Simultaneous signal generation across strategies
+- **Quality Filtering**: Advanced signal filtering and confidence scoring
+- **Performance Optimization**: Efficient processing with horizontal scaling
 
 #### Custom Strategy Development
-```python
-# Create a custom strategy combining multiple indicators
-from src.strategies.base import TradingStrategy
-from src.core.models import Signal, SignalType
-from src.indicators.momentum import RSICalculator
-from src.indicators.moving_averages import EMACalculator
 
-class CustomMomentumStrategy(TradingStrategy):
-    def __init__(self, parameters=None):
-        super().__init__(parameters)
-        self.rsi_calculator = RSICalculator(period=14)
-        self.ema_calculator = EMACalculator(period=20)
-    
-    def generate_signals(self, market_data):
-        signals = []
-        
-        # Calculate indicators
-        rsi_values = self.rsi_calculator.calculate(market_data.data)
-        ema_values = self.ema_calculator.calculate(market_data.data)
-        
-        for i in range(len(market_data.data)):
-            if i < 20:  # Need enough data
-                continue
-                
-            current_price = market_data.data[i].close
-            rsi = rsi_values[i]
-            ema = ema_values[i]
-            
-            # Custom signal logic
-            if rsi < 30 and current_price > ema:
-                signal = Signal(
-                    timestamp=market_data.data[i].timestamp,
-                    symbol=market_data.symbol,
-                    signal_type=SignalType.BUY,
-                    price=current_price,
-                    confidence=0.8,
-                    strategy_name="custom_momentum"
-                )
-                signals.append(signal)
-            elif rsi > 70 and current_price < ema:
-                signal = Signal(
-                    timestamp=market_data.data[i].timestamp,
-                    symbol=market_data.symbol,
-                    signal_type=SignalType.SELL,
-                    price=current_price,
-                    confidence=0.8,
-                    strategy_name="custom_momentum"
-                )
-                signals.append(signal)
-        
-        return signals
+**Architecture Pattern**: Extensible strategy framework for custom signal logic
 
-# Test custom strategy
-custom_strategy = CustomMomentumStrategy()
-data = generator.generate_realistic_data('SPY', periods=252)
-signals = custom_strategy.generate_signals(data)
-print(f"Custom strategy generated {len(signals)} signals")
-```
+**Key Components:**
+- **Base Strategy Class**: Abstract base class with standardized interface
+- **Signal Models**: Structured signal representation with confidence scoring
+- **Indicator Integration**: Seamless integration with technical indicator library
+- **Performance Validation**: Automated testing and validation framework
+
+**Development Process:**
+- **Strategy Inheritance**: Extend TradingStrategy base class
+- **Indicator Integration**: Use built-in RSI, EMA, MACD, and other calculators
+- **Signal Generation**: Implement custom signal logic with confidence scoring
+- **Testing Framework**: Automated validation with realistic market data
+
+**Custom Strategy Features:**
+- **Multi-Indicator Combinations**: Combine multiple technical indicators
+- **Confidence Scoring**: Dynamic confidence calculation based on signal strength
+- **Signal Filtering**: Advanced filtering based on market conditions
+- **Performance Metrics**: Comprehensive performance evaluation and comparison
 
 #### Data Analysis and Backtesting
-```python
-# Backtesting across multiple scenarios
-from src.data.mock_generator import MockDataGenerator
-from src.backtest.engine import BacktestEngine
-from src.strategies import create_strategy
 
-def analyze_strategy_across_conditions(strategy_name, conditions):
-    """Analyze strategy performance across different market conditions."""
-    results = {}
-    
-    for condition_name, generator_params in conditions.items():
-        generator = MockDataGenerator(**generator_params)
-        data = generator.generate_realistic_data('SPY', periods=252)
-        
-        strategy = create_strategy(strategy_name)
-        engine = BacktestEngine()
-        result = engine.run_backtest(strategy, data, initial_capital=10000)
-        
-        results[condition_name] = {
-            'total_return': result.performance_metrics.total_return_pct,
-            'win_rate': result.performance_metrics.win_rate,
-            'sharpe_ratio': result.performance_metrics.sharpe_ratio,
-            'max_drawdown': result.performance_metrics.max_drawdown_pct
-        }
-    
-    return results
+**Architecture Pattern**: Comprehensive signal analysis across multiple market conditions
 
-# Test different market conditions
-market_conditions = {
-    'bull_market': {'trend': 'bullish', 'volatility': 0.15},
-    'bear_market': {'trend': 'bearish', 'volatility': 0.25},
-    'sideways_market': {'trend': 'sideways', 'volatility': 0.10},
-    'high_volatility': {'trend': 'neutral', 'volatility': 0.35}
-}
+**Key Components:**
+- **Multi-Condition Analysis**: Systematic testing across different market scenarios
+- **Performance Aggregation**: Comprehensive metrics collection and comparison
+- **Market Condition Simulation**: Realistic market data generation for various conditions
+- **Results Evaluation**: Automated analysis and performance ranking
 
-# Analyze MACD+RSI strategy across conditions
-results = analyze_strategy_across_conditions('macd_rsi', market_conditions)
-for condition, metrics in results.items():
-    print(f"{condition}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
-```
+**Market Condition Testing:**
+- **Bull Market**: Upward trending market with moderate volatility
+- **Bear Market**: Downward trending market with higher volatility
+- **Sideways Market**: Range-bound market with low volatility
+- **High Volatility**: Neutral trend with elevated volatility
+
+**Analysis Features:**
+- **Strategy Robustness**: Performance validation across market conditions
+- **Risk Assessment**: Comprehensive risk metrics for different scenarios
+- **Performance Comparison**: Comparative analysis across strategies and conditions
+- **Quality Scoring**: Signal quality evaluation under varying market conditions
 
 #### Performance Comparison and Optimization
-```python
-# Performance comparison with parameter optimization
-from src.strategies import DEFAULT_STRATEGY_PARAMS, create_strategy
-import itertools
 
-def optimize_strategy_parameters(strategy_name, symbol, param_ranges):
-    """Optimize strategy parameters using grid search."""
-    best_result = None
-    best_params = None
-    best_return = -float('inf')
-    
-    # Generate parameter combinations
-    param_names = list(param_ranges.keys())
-    param_values = list(param_ranges.values())
-    
-    for params_combo in itertools.product(*param_values):
-        params = dict(zip(param_names, params_combo))
-        
-        # Test this parameter combination
-        generator = MockDataGenerator()
-        data = generator.generate_realistic_data(symbol, periods=252)
-        
-        strategy = create_strategy(strategy_name, params)
-        engine = BacktestEngine()
-        result = engine.run_backtest(strategy, data, initial_capital=10000)
-        
-        if result.performance_metrics.total_return_pct > best_return:
-            best_return = result.performance_metrics.total_return_pct
-            best_params = params
-            best_result = result
-    
-    return best_result, best_params
+**Architecture Pattern**: Systematic parameter optimization and performance comparison
 
-# Example: Optimize RSI parameters
-rsi_param_ranges = {
-    'rsi_period': [10, 14, 18, 21],
-    'rsi_oversold': [25, 30, 35],
-    'rsi_overbought': [65, 70, 75]
-}
+**Key Components:**
+- **Grid Search Optimization**: Systematic parameter space exploration
+- **Performance Comparison**: Multi-strategy performance evaluation
+- **Parameter Tuning**: Automated optimization across parameter ranges
+- **Results Validation**: Statistical validation of optimization results
 
-best_result, best_params = optimize_strategy_parameters('rsi_trend', 'SPY', rsi_param_ranges)
-print(f"Best parameters: {best_params}")
-print(f"Best return: {best_result.performance_metrics.total_return_pct:.2%}")
-```
+**Optimization Features:**
+- **Multi-Parameter Optimization**: Simultaneous optimization across multiple parameters
+- **Cross-Validation**: Performance validation across different data periods
+- **Overfitting Prevention**: Robust validation to prevent parameter overfitting
+- **Performance Metrics**: Comprehensive evaluation beyond simple returns
+
+**Parameter Ranges:**
+- **RSI Parameters**: Period, oversold/overbought thresholds
+- **MACD Parameters**: Fast/slow periods, signal smoothing
+- **Moving Average Parameters**: Period selection and type optimization
+- **Bollinger Band Parameters**: Period and standard deviation multipliers
 
 ### Data Analysis Output
 
-The Python API returns structured data objects that can be easily processed:
+**Architecture Pattern**: Structured data objects for comprehensive signal analysis
 
-```python
-# Example: Getting strategy performance data
-result = engine.run_backtest(strategy, data, initial_capital=10000)
-performance = result.performance_metrics
+**Key Components:**
+- **Performance Metrics**: Comprehensive signal performance evaluation
+- **Signal Quality Assessment**: Confidence scoring and reliability metrics
+- **Risk Assessment**: Drawdown analysis and risk-adjusted returns
+- **Comparative Analysis**: Multi-strategy performance comparison
 
-print(f"Total Return: {performance.total_return_pct:.2%}")
-print(f"Win Rate: {performance.win_rate:.2%}")
-print(f"Sharpe Ratio: {performance.sharpe_ratio:.2f}")
-print(f"Max Drawdown: {performance.max_drawdown_pct:.2%}")
-```
+**Data Structure Features:**
+- **Signal Quality Metrics**: Confidence scoring, frequency analysis, reliability assessment
+- **Performance Evaluation**: Return analysis, win rate calculation, risk metrics
+- **Temporal Analysis**: Signal timing, frequency distribution, consistency metrics
+- **Risk Metrics**: Drawdown analysis, volatility assessment, risk-adjusted performance
 
 ## 📊 Strategy Analysis
 
@@ -667,60 +470,46 @@ The system provides comprehensive strategy analysis through the Python API, help
 
 ### Trading Style Analysis
 
-The Python API can analyze strategies across different trading styles:
+**Architecture Pattern**: Multi-dimensional strategy analysis across trading styles
 
-```python
-from src.analysis.strategy_analyzer import StrategyAnalyzer
-from src.data.mock_generator import MockDataGenerator
+**Key Components:**
+- **Strategy Analyzer**: Comprehensive analysis engine for trading style evaluation
+- **Style Classification**: Systematic categorization of trading approaches
+- **Performance Comparison**: Multi-style performance evaluation and ranking
+- **Adaptive Configuration**: Dynamic parameter adjustment for different styles
 
-# Initialize analyzer
-analyzer = StrategyAnalyzer()
-generator = MockDataGenerator()
+**Trading Style Categories:**
+- **Day Trading**: High-frequency signals with short holding periods
+- **Swing Trading**: Medium-term signals with multi-day holding periods
+- **Position Trading**: Long-term signals with extended holding periods
 
-# Analyze strategy across different timeframes/styles
-strategy_results = {}
-for style in ['day_trading', 'swing_trading', 'position_trading']:
-    data = generator.generate_realistic_data('SPY', periods=252)
-    strategy = create_strategy('macd_rsi')
-    engine = BacktestEngine()
-    result = engine.run_backtest(strategy, data, initial_capital=10000)
-    strategy_results[style] = result.performance_metrics
-
-# Compare results
-for style, metrics in strategy_results.items():
-    print(f"{style}: {metrics.total_return_pct:.2%} return, {metrics.win_rate:.1%} win rate")
-```
+**Analysis Features:**
+- **Style-Specific Metrics**: Performance evaluation tailored to each trading style
+- **Comparative Analysis**: Cross-style performance comparison and ranking
+- **Risk Assessment**: Style-specific risk metrics and drawdown analysis
+- **Optimization Recommendations**: Strategy parameter suggestions for each style
 
 ### Performance Evaluation
 
-The system provides detailed performance metrics for strategy evaluation:
+**Architecture Pattern**: Comprehensive performance metrics for strategy evaluation
 
-```python
-# Comprehensive strategy evaluation
-def evaluate_strategy(strategy_name, symbol, periods=252):
-    strategy = create_strategy(strategy_name)
-    generator = MockDataGenerator()
-    data = generator.generate_realistic_data(symbol, periods=periods)
-    
-    engine = BacktestEngine()
-    result = engine.run_backtest(strategy, data, initial_capital=10000)
-    
-    metrics = result.performance_metrics
-    return {
-        'win_rate': metrics.win_rate,
-        'total_return': metrics.total_return_pct,
-        'sharpe_ratio': metrics.sharpe_ratio,
-        'max_drawdown': metrics.max_drawdown_pct,
-        'profit_factor': metrics.profit_factor,
-        'total_trades': metrics.total_trades
-    }
+**Key Components:**
+- **Performance Metrics Engine**: Comprehensive evaluation of signal quality and performance
+- **Multi-Strategy Evaluation**: Systematic comparison across all available strategies
+- **Risk Assessment**: Advanced risk metrics and drawdown analysis
+- **Quality Scoring**: Signal confidence and reliability assessment
 
-# Evaluate multiple strategies
-strategies = ['macd_rsi', 'ma_crossover', 'rsi_trend', 'bollinger_breakout']
-for strategy_name in strategies:
-    metrics = evaluate_strategy(strategy_name, 'SPY')
-    print(f"{strategy_name}: {metrics['total_return']:.2%} return, {metrics['win_rate']:.1%} win rate")
-```
+**Performance Metrics:**
+- **Signal Quality**: Win rate, signal frequency, confidence scoring
+- **Return Analysis**: Total return, risk-adjusted returns, consistency metrics
+- **Risk Metrics**: Maximum drawdown, volatility, Sharpe ratio
+- **Trade Analysis**: Signal frequency, profit factor, consistency evaluation
+
+**Evaluation Features:**
+- **Multi-Symbol Analysis**: Performance evaluation across different asset classes
+- **Time-Series Analysis**: Performance consistency over different time periods
+- **Comparative Ranking**: Automated ranking based on composite scoring
+- **Risk-Adjusted Performance**: Sharpe ratio, Sortino ratio, and other risk metrics
 
 ## 📖 Strategy Documentation & Explanations
 
@@ -736,24 +525,19 @@ The system provides comprehensive strategy documentation through the Python API.
 
 ### Accessing Strategy Information
 
-```python
-from src.strategies import STRATEGY_REGISTRY, create_strategy
+**Architecture Pattern**: Comprehensive strategy documentation and metadata access
 
-# View all available strategies
-for name, strategy_class in STRATEGY_REGISTRY.items():
-    print(f"{name}: {strategy_class.__doc__ or 'Trading strategy'}")
+**Key Components:**
+- **Strategy Registry**: Centralized repository of all available strategies
+- **Metadata Access**: Comprehensive strategy documentation and parameter information
+- **Dynamic Configuration**: Parameter inspection and validation
+- **Usage Guidelines**: Best practices and implementation recommendations
 
-# Get strategy with default parameters
-strategy = create_strategy('macd_rsi')
-print(f"Strategy: {strategy.__class__.__name__}")
-
-# Access strategy documentation
-strategy = create_strategy('macd_rsi')
-if hasattr(strategy, 'get_strategy_info'):
-    info = strategy.get_strategy_info()
-    print(f"Description: {info.get('description', 'N/A')}")
-    print(f"Parameters: {info.get('parameters', {})}")
-```
+**Information Categories:**
+- **Strategy Description**: Detailed explanation of signal generation logic
+- **Parameter Documentation**: Default values, ranges, and optimization guidelines
+- **Performance Characteristics**: Expected performance metrics and risk profiles
+- **Implementation Details**: Technical implementation and computational requirements
 
 ### Available Strategy Information
 
@@ -767,24 +551,19 @@ if hasattr(strategy, 'get_strategy_info'):
 
 ### Strategy Parameter Inspection
 
-```python
-# Inspect strategy parameters and signals
-strategy = create_strategy('macd_rsi')
-generator = MockDataGenerator()
-data = generator.generate_realistic_data('SPY', periods=100)
+**Architecture Pattern**: Dynamic strategy parameter inspection and signal analysis
 
-# Generate signals to understand strategy behavior
-signals = strategy.generate_signals(data)
-print(f"Generated {len(signals)} signals")
+**Key Components:**
+- **Parameter Inspection**: Dynamic analysis of strategy parameters and defaults
+- **Signal Generation Analysis**: Comprehensive signal behavior evaluation
+- **Distribution Analysis**: Statistical analysis of signal patterns and types
+- **Performance Validation**: Signal quality assessment and validation
 
-# Analyze signal distribution
-signal_types = {}
-for signal in signals:
-    signal_types[signal.signal_type.value] = signal_types.get(signal.signal_type.value, 0) + 1
-
-for signal_type, count in signal_types.items():
-    print(f"{signal_type}: {count} signals")
-```
+**Inspection Features:**
+- **Parameter Analysis**: Default values, ranges, and optimization potential
+- **Signal Distribution**: Statistical analysis of signal frequency and types
+- **Confidence Assessment**: Signal confidence scoring and reliability metrics
+- **Temporal Analysis**: Signal timing distribution and frequency patterns
 
 ## 📈 Period-Based Returns Analysis
 
