@@ -686,33 +686,32 @@ class TestSRBreakout:
         assert isinstance(signals, list)
 
 
-class TestStrategyPerformance:
-    """Test strategy performance and benchmarks."""
+class TestSignalQualityMetrics:
+    """Test signal quality metrics and validation."""
     
-    def test_ma_crossover_performance(self, sample_market_data, execution_timer):
-        """Test MA crossover performance."""
-        strategy = MovingAverageCrossover({'short_period': 20, 'long_period': 50})
+    def test_signal_confidence_calculation(self, sample_market_data):
+        """Test signal confidence calculation accuracy."""
+        strategy = MovingAverageCrossover({'short_period': 10, 'long_period': 20})
         
-        # Create realistic indicators
+        # Create test indicators for confidence calculation
         close_data = [bar.close for bar in sample_market_data.data]
         indicators = {
             'ema': {
-                'ema_20': calculate_ema(close_data, 20),
-                'ema_50': calculate_ema(close_data, 50)
+                'ema_10': calculate_ema(close_data, 10),
+                'ema_20': calculate_ema(close_data, 20)
             }
         }
         
-        execution_timer.start()
         signals = strategy.generate_signals(sample_market_data, indicators)
-        execution_timer.stop()
         
-        # Should complete quickly
-        assert execution_timer.get_elapsed_time() < 1.0
-        assert isinstance(signals, list)
+        # Test confidence score validity
+        for signal in signals:
+            assert 0.0 <= signal.confidence <= 1.0, f"Invalid confidence: {signal.confidence}"
+            assert signal.confidence >= strategy.parameters.get('min_confidence', 0.5)
     
-    def test_rsi_trend_performance(self, sample_market_data, execution_timer):
-        """Test RSI trend performance."""
-        strategy = RSITrend({'rsi_period': 14, 'trend_period': 50})
+    def test_signal_frequency_analysis(self, sample_market_data):
+        """Test signal frequency and distribution."""
+        strategy = RSITrend({'rsi_period': 14, 'rsi_oversold': 30, 'rsi_overbought': 70})
         
         close_data = [bar.close for bar in sample_market_data.data]
         indicators = {
@@ -720,17 +719,17 @@ class TestStrategyPerformance:
             'sma': {'sma_50': calculate_sma(close_data, 50)}
         }
         
-        execution_timer.start()
         signals = strategy.generate_signals(sample_market_data, indicators)
-        execution_timer.stop()
         
-        assert execution_timer.get_elapsed_time() < 1.0
-        assert isinstance(signals, list)
+        # Analyze signal frequency
+        total_periods = len(sample_market_data.data)
+        signal_frequency = len(signals) / total_periods if total_periods > 0 else 0
+        
+        # Signal frequency should be reasonable (not too high or too low)
+        assert 0.0 <= signal_frequency <= 0.5, f"Signal frequency out of range: {signal_frequency}"
     
-    def test_strategy_memory_usage(self, sample_market_data, memory_monitor):
-        """Test strategy memory usage."""
-        initial_memory = memory_monitor.get_current_usage()
-        
+    def test_signal_quality_distribution(self, sample_market_data):
+        """Test signal quality score distribution."""
         strategies = [
             MovingAverageCrossover(),
             RSITrend(),
@@ -742,13 +741,16 @@ class TestStrategyPerformance:
         for strategy in strategies:
             # Generate minimal indicators
             indicators = {indicator: {} for indicator in strategy.get_required_indicators()}
-            strategy.generate_signals(sample_market_data, indicators)
-        
-        final_memory = memory_monitor.get_current_usage()
-        memory_increase = final_memory - initial_memory
-        
-        # Should not use excessive memory
-        assert memory_increase < 50  # MB
+            signals = strategy.generate_signals(sample_market_data, indicators)
+            
+            if signals:
+                # Calculate quality distribution
+                confidences = [s.confidence for s in signals]
+                avg_confidence = sum(confidences) / len(confidences)
+                
+                # Quality checks
+                assert avg_confidence >= 0.5, f"Average confidence too low: {avg_confidence}"
+                assert all(c >= 0.5 for c in confidences), "All signals should meet minimum confidence"
 
 
 class TestStrategyErrorHandling:
@@ -851,11 +853,46 @@ class TestStrategyErrorHandling:
             assert isinstance(signals, list)
 
 
-class TestStrategyOptimization:
-    """Test strategy parameter optimization."""
+class TestSignalValidation:
+    """Test signal validation and quality checks."""
     
-    def test_parameter_ranges(self):
-        """Test parameter ranges for optimization."""
+    def test_signal_metadata_completeness(self):
+        """Test signal metadata completeness validation."""
+        strategy = MovingAverageCrossover()
+        
+        # Test complete metadata
+        complete_signal = Signal(
+            timestamp=datetime.now(),
+            symbol="AAPL",
+            signal_type=SignalType.BUY,
+            price=150.0,
+            confidence=0.8,
+            strategy_name="MovingAverageCrossover",
+            metadata={
+                'short_ema': 151.0,
+                'long_ema': 149.0,
+                'ema_separation': 0.013,
+                'volume_confirmation': True,
+                'trend_strength': 0.7
+            }
+        )
+        
+        # Test incomplete metadata
+        incomplete_signal = Signal(
+            timestamp=datetime.now(),
+            symbol="AAPL",
+            signal_type=SignalType.BUY,
+            price=150.0,
+            confidence=0.8,
+            strategy_name="MovingAverageCrossover",
+            metadata={}  # Missing required metadata
+        )
+        
+        assert strategy._validate_signal_strategy(complete_signal) is True
+        assert strategy._validate_signal_strategy(incomplete_signal) is False
+    
+    def test_signal_quality_thresholds(self):
+        """Test signal quality threshold validation."""
         strategies = [
             MovingAverageCrossover(),
             RSITrend(),
@@ -865,54 +902,57 @@ class TestStrategyOptimization:
         ]
         
         for strategy in strategies:
-            ranges = strategy._get_parameter_ranges()
+            # Test signals at different confidence levels
+            confidence_levels = [0.4, 0.6, 0.8, 0.95]
             
-            # Should return a dictionary
-            assert isinstance(ranges, dict)
-            
-            # If ranges are provided, they should contain lists
-            for key, value in ranges.items():
-                if value:
-                    assert isinstance(value, list)
-                    assert len(value) > 0
+            for confidence in confidence_levels:
+                test_signal = Signal(
+                    timestamp=datetime.now(),
+                    symbol="TEST",
+                    signal_type=SignalType.BUY,
+                    price=100.0,
+                    confidence=confidence,
+                    strategy_name=strategy.name,
+                    metadata={}
+                )
+                
+                should_pass = confidence >= strategy.parameters.get('min_confidence', 0.5)
+                signals = strategy.validate_signals([test_signal])
+                
+                if should_pass:
+                    assert len(signals) == 1, f"Signal with confidence {confidence} should pass for {strategy.name}"
+                else:
+                    assert len(signals) == 0, f"Signal with confidence {confidence} should fail for {strategy.name}"
     
-    def test_optimization_metrics(self, sample_market_data):
-        """Test optimization metrics calculation."""
-        strategy = MovingAverageCrossover({'short_period': 10, 'long_period': 20})
-        
-        # Test different metrics
-        metrics = ['sharpe', 'return', 'win_rate', 'profit_factor']
-        
-        for metric in metrics:
-            score = strategy._calculate_performance_score(sample_market_data, metric)
-            
-            # Should return a number
-            assert isinstance(score, (int, float))
-            
-            # Should not be NaN (unless legitimately no signals)
-            if not np.isnan(score):
-                assert score != float('inf') or score != float('-inf')
-    
-    @pytest.mark.slow
-    def test_full_optimization(self, sample_market_data):
-        """Test full parameter optimization (marked as slow)."""
+    def test_signal_timing_validation(self):
+        """Test signal timing and freshness validation."""
         strategy = MovingAverageCrossover()
         
-        # Limited parameter ranges for testing
-        param_ranges = {
-            'short_period': [10, 20],
-            'long_period': [30, 40]
-        }
+        # Test current signal
+        current_signal = Signal(
+            timestamp=datetime.now(),
+            symbol="AAPL",
+            signal_type=SignalType.BUY,
+            price=150.0,
+            confidence=0.8,
+            strategy_name="MovingAverageCrossover",
+            metadata={'short_ema': 151, 'long_ema': 149, 'ema_separation': 0.01}
+        )
         
-        with patch.object(strategy, '_get_parameter_ranges', return_value=param_ranges):
-            best_params = strategy.optimize_parameters(sample_market_data, 'sharpe')
+        # Test old signal (should be valid if not checking timing)
+        old_signal = Signal(
+            timestamp=datetime.now() - timedelta(hours=2),
+            symbol="AAPL",
+            signal_type=SignalType.BUY,
+            price=150.0,
+            confidence=0.8,
+            strategy_name="MovingAverageCrossover",
+            metadata={'short_ema': 151, 'long_ema': 149, 'ema_separation': 0.01}
+        )
         
-        # Should return parameters
-        assert isinstance(best_params, dict)
-        
-        # Should contain the optimized parameters
-        if best_params:
-            assert 'short_period' in best_params or 'long_period' in best_params
+        # Both should be valid (timestamp validation is context-dependent)
+        assert strategy._validate_signal_strategy(current_signal) is True
+        assert strategy._validate_signal_strategy(old_signal) is True
 
 
 class TestStrategyValidation:

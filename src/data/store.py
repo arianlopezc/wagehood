@@ -11,11 +11,7 @@ from collections import defaultdict
 import logging
 
 # Optional numpy import for performance
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
+# Numpy import removed as it's not used in this module
 
 from ..core.models import OHLCV, TimeFrame, MarketData
 from ..storage.cache import cache_manager, cached

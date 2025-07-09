@@ -6,7 +6,7 @@ various types of market data patterns for testing and backtesting.
 """
 
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 import random
 import math
 from dataclasses import dataclass
@@ -59,6 +59,8 @@ class MockDataGenerator:
     
     def _random_normal(self, mean: float, std: float, size: int = 1):
         """Generate normal random numbers, with or without numpy."""
+        # Ensure std is always positive
+        std = max(abs(std), 1e-8)
         if HAS_NUMPY:
             return self.rng.normal(mean, std, size)
         else:
@@ -73,12 +75,13 @@ class MockDataGenerator:
     
     def _random_exponential(self, scale: float, size: int = 1):
         """Generate exponential random numbers, with or without numpy."""
+        # Avoid division by zero or negative scale
+        if scale <= 0:
+            scale = 1e-10
+            
         if HAS_NUMPY:
             return self.rng.exponential(scale, size)
         else:
-            # Avoid division by zero
-            if scale <= 0:
-                scale = 1e-10
             return [random.expovariate(1.0 / scale) for _ in range(size)]
         
     def generate_trending_data(self, periods: int, trend_strength: float = 0.02,

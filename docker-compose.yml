@@ -1,0 +1,148 @@
+services:
+  wagehood:
+    build: .
+    image: wagehood:latest
+    container_name: wagehood-trading
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - WAGEHOOD_ENV=production
+      - REDIS_HOST=${REDIS_HOST:-localhost}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_STREAMS_MAXLEN=${REDIS_STREAMS_MAXLEN:-10000}
+      - REDIS_STORE_SYMBOL_VALUES=${REDIS_STORE_SYMBOL_VALUES:-true}
+      - REDIS_SYMBOL_HISTORY_TTL=${REDIS_SYMBOL_HISTORY_TTL:-86400}
+      - REDIS_SYMBOL_HISTORY_MAX_SIZE=${REDIS_SYMBOL_HISTORY_MAX_SIZE:-1000}
+      
+      # MANDATORY: Alpaca credentials (set via .env file or docker run -e)
+      - ALPACA_API_KEY=${ALPACA_API_KEY:?ALPACA_API_KEY environment variable is required}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:?ALPACA_SECRET_KEY environment variable is required}
+      
+      # Optional: Alpaca configuration
+      - ALPACA_PAPER_TRADING=${ALPACA_PAPER_TRADING:-true}
+      - ALPACA_DATA_FEED=${ALPACA_DATA_FEED:-iex}
+      - ALPACA_MAX_RETRIES=${ALPACA_MAX_RETRIES:-3}
+      - ALPACA_RETRY_DELAY=${ALPACA_RETRY_DELAY:-1.0}
+      
+      # Watchlist Configuration
+      - WATCHLIST_SYMBOLS=${WATCHLIST_SYMBOLS:-AAPL,MSFT,GOOGL,TSLA,SPY,QQQ,IWM}
+      
+      # System Configuration
+      - DATA_PROVIDER=${DATA_PROVIDER:-alpaca}
+      - DATA_UPDATE_INTERVAL=${DATA_UPDATE_INTERVAL:-1}
+      - CALCULATION_WORKERS=${CALCULATION_WORKERS:-8}
+      - MAX_CONCURRENT_CALCULATIONS=${MAX_CONCURRENT_CALCULATIONS:-100}
+      - BATCH_CALCULATION_SIZE=${BATCH_CALCULATION_SIZE:-10}
+      - MAX_EVENTS_PER_SECOND=${MAX_EVENTS_PER_SECOND:-1000}
+      
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-%(asctime)s - %(name)s - %(levelname)s - %(message)s}
+      
+      # Discord Notification Configuration
+      - DISCORD_NOTIFICATIONS_ENABLED=${DISCORD_NOTIFICATIONS_ENABLED:-false}
+      - DISCORD_MULTI_CHANNEL_ENABLED=${DISCORD_MULTI_CHANNEL_ENABLED:-false}
+      - DISCORD_NOTIFY_TIMEFRAMES=${DISCORD_NOTIFY_TIMEFRAMES:-1d}
+      - DISCORD_ALERT_SYMBOLS=${DISCORD_ALERT_SYMBOLS:-TSLA,IWM}
+      - DISCORD_MIN_CONFIDENCE_THRESHOLD=${DISCORD_MIN_CONFIDENCE_THRESHOLD:-0.0}
+      - DISCORD_STRATEGY_TIMEFRAME_MAPPING=${DISCORD_STRATEGY_TIMEFRAME_MAPPING:-}
+      - DISCORD_SWING_TRADING_STRATEGIES=${DISCORD_SWING_TRADING_STRATEGIES:-}
+      - DISCORD_DAY_TRADING_STRATEGIES=${DISCORD_DAY_TRADING_STRATEGIES:-}
+      
+      # Strategy-Specific Discord Webhooks
+      - DISCORD_WEBHOOK_SWING_SIGNALS=${DISCORD_WEBHOOK_SWING_SIGNALS:-}
+      - DISCORD_WEBHOOK_MACD_RSI=${DISCORD_WEBHOOK_MACD_RSI:-}
+      - DISCORD_WEBHOOK_RSI_TREND=${DISCORD_WEBHOOK_RSI_TREND:-}
+      - DISCORD_WEBHOOK_BOLLINGER_BREAKOUT=${DISCORD_WEBHOOK_BOLLINGER_BREAKOUT:-}
+      - DISCORD_WEBHOOK_SR_BREAKOUT=${DISCORD_WEBHOOK_SR_BREAKOUT:-}
+      
+      # Strategy-Specific Rate Limits (notifications per hour)
+      - DISCORD_RATE_LIMIT_MACD_RSI=${DISCORD_RATE_LIMIT_MACD_RSI:-8}
+      - DISCORD_RATE_LIMIT_RSI_TREND=${DISCORD_RATE_LIMIT_RSI_TREND:-12}
+      - DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT=${DISCORD_RATE_LIMIT_BOLLINGER_BREAKOUT:-15}
+      - DISCORD_RATE_LIMIT_SR_BREAKOUT=${DISCORD_RATE_LIMIT_SR_BREAKOUT:-6}
+      
+      # Strategy-Specific Enabled Status
+      - DISCORD_ENABLED_MACD_RSI=${DISCORD_ENABLED_MACD_RSI:-true}
+      - DISCORD_ENABLED_RSI_TREND=${DISCORD_ENABLED_RSI_TREND:-true}
+      - DISCORD_ENABLED_BOLLINGER_BREAKOUT=${DISCORD_ENABLED_BOLLINGER_BREAKOUT:-true}
+      - DISCORD_ENABLED_SR_BREAKOUT=${DISCORD_ENABLED_SR_BREAKOUT:-true}
+    
+    # Port mapping for Redis
+    ports:
+      - "6380:6379"
+    
+    # Network configuration
+    networks:
+      - wagehood-network
+    
+    # Volume mounts for data persistence
+    volumes:
+      - wagehood-data:/app/data
+      - wagehood-logs:/app/logs
+      # Optional: Mount custom configuration
+      # - ./config:/app/config:ro
+    
+    # Comprehensive health check with Alpaca connectivity validation
+    healthcheck:
+      test: ["CMD", "python", "docker-healthcheck.py"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Separate Redis container for production
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: wagehood-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # Optional: Monitoring with Redis Insight
+  # redis-insight:
+  #   image: redislabs/redis-insight:latest
+  #   container_name: wagehood-redis-insight
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8001"
+  #   volumes:
+  #     - redis-insight-data:/db
+
+volumes:
+  wagehood-data:
+    driver: local
+  wagehood-logs:
+    driver: local
+  # redis-data:
+  #   driver: local
+  # redis-insight-data:
+  #   driver: local
+
+# Networks
+networks:
+  wagehood-network:
+    name: wagehood-network
+    driver: bridge
