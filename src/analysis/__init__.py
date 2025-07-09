@@ -1,11 +1,6 @@
 """
-Analysis module for performance evaluation and strategy comparison
+Analysis module for signal quality evaluation and strategy comparison
 """
 
-from .evaluator import PerformanceEvaluator
-from .comparison import StrategyComparator
-
-__all__ = [
-    'PerformanceEvaluator',
-    'StrategyComparator'
-]
+# Signal-only analysis components
+__all__ = ["SignalQualityEvaluator", "SignalComparator"]

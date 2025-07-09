@@ -33,7 +33,7 @@ TEST_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "TSLA", "SPY"]
 # Performance thresholds
 PERFORMANCE_THRESHOLDS = {
     "max_execution_time": 5.0,  # seconds
-    "max_memory_usage": 100,    # MB
+    "max_memory_usage": 100,  # MB
     "min_test_coverage": 90.0,  # percentage
 }
 

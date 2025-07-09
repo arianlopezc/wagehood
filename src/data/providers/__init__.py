@@ -9,7 +9,7 @@ from .base import DataProvider
 from .mock_provider import MockProvider
 
 try:
-    from .alpaca_provider import AlpacaProvider
+    # from .alpaca_provider import AlpacaProvider  # Import when needed
     ALPACA_AVAILABLE = True
 except ImportError:
     ALPACA_AVAILABLE = False

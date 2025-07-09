@@ -276,7 +276,7 @@ def generate_test_report(results: List[Dict[str, Any]], args: argparse.Namespace
         print("-" * 80)
         if os.path.exists("htmlcov/index.html"):
             print("HTML coverage report generated: htmlcov/index.html")
-        print("Run 'python -m http.server 8000' in project root and visit http://localhost:8000/htmlcov/")
+        print("Run 'python -m http.server 8000' in project root and visit http://127.0.0.1:8000/htmlcov/")
     
     # Performance summary
     performance_results = [r for r in results if "Performance" in r["name"]]

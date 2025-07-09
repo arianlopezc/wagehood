@@ -4,51 +4,47 @@ from .models import (
     OHLCV,
     Signal,
     SignalType,
-    Trade,
-    PerformanceMetrics,
-    BacktestResult,
+    SignalAnalysisResult,
     TimeFrame,
     MarketData,
     StrategyStatus,
-    StrategyConfig
+    StrategyConfig,
 )
 from .exceptions import (
     WagehoodError,
     DataError,
     CalculationError,
     StrategyError,
-    BacktestError
+    BacktestError,
 )
 from .constants import (
     DEFAULT_COMMISSION,
     DEFAULT_SLIPPAGE,
     MIN_DATA_POINTS,
     MAX_POSITION_SIZE,
-    RISK_FREE_RATE
+    RISK_FREE_RATE,
 )
 
 __all__ = [
     # Models
-    'OHLCV',
-    'Signal',
-    'SignalType', 
-    'Trade',
-    'PerformanceMetrics',
-    'BacktestResult',
-    'TimeFrame',
-    'MarketData',
-    'StrategyStatus',
-    'StrategyConfig',
+    "OHLCV",
+    "Signal",
+    "SignalType",
+    "SignalAnalysisResult",
+    "TimeFrame",
+    "MarketData",
+    "StrategyStatus",
+    "StrategyConfig",
     # Exceptions
-    'WagehoodError',
-    'DataError',
-    'CalculationError',
-    'StrategyError',
-    'BacktestError',
+    "WagehoodError",
+    "DataError",
+    "CalculationError",
+    "StrategyError",
+    "BacktestError",
     # Constants
-    'DEFAULT_COMMISSION',
-    'DEFAULT_SLIPPAGE',
-    'MIN_DATA_POINTS',
-    'MAX_POSITION_SIZE',
-    'RISK_FREE_RATE'
+    "DEFAULT_COMMISSION",
+    "DEFAULT_SLIPPAGE",
+    "MIN_DATA_POINTS",
+    "MAX_POSITION_SIZE",
+    "RISK_FREE_RATE",
 ]

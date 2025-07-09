@@ -1,0 +1,88 @@
+{
+  "suites": [
+    {
+      "name": "mathematical",
+      "path": "mathematical/",
+      "dependencies": [],
+      "timeout": 300,
+      "parallel": true,
+      "critical": true,
+      "description": "Mathematical validation tests for strategies and indicators",
+      "tags": ["math", "validation", "critical"]
+    },
+    {
+      "name": "integration_alpaca",
+      "path": "integration/test_alpaca_api_integration.py",
+      "dependencies": [],
+      "timeout": 600,
+      "parallel": false,
+      "critical": true,
+      "description": "Alpaca API integration tests",
+      "tags": ["integration", "alpaca", "api"]
+    },
+    {
+      "name": "integration_streaming",
+      "path": "integration/test_realtime_streaming.py",
+      "dependencies": ["integration_alpaca"],
+      "timeout": 900,
+      "parallel": false,
+      "critical": true,
+      "description": "Real-time streaming integration tests",
+      "tags": ["integration", "streaming", "realtime"]
+    },
+    {
+      "name": "workers",
+      "path": "workers/",
+      "dependencies": ["mathematical"],
+      "timeout": 1200,
+      "parallel": true,
+      "critical": true,
+      "description": "Worker process validation tests",
+      "tags": ["workers", "processes", "critical"]
+    },
+    {
+      "name": "e2e",
+      "path": "e2e/",
+      "dependencies": ["mathematical", "integration_alpaca", "workers"],
+      "timeout": 1800,
+      "parallel": false,
+      "critical": true,
+      "description": "End-to-end system integration tests",
+      "tags": ["e2e", "integration", "critical"]
+    },
+    {
+      "name": "performance",
+      "path": "performance/",
+      "dependencies": ["mathematical", "workers"],
+      "timeout": 2400,
+      "parallel": true,
+      "critical": false,
+      "description": "Performance and stress tests",
+      "tags": ["performance", "stress", "benchmark"]
+    }
+  ],
+  "configuration": {
+    "global_timeout": 7200,
+    "max_parallel_jobs": 4,
+    "continue_on_failure": true,
+    "cleanup_after_execution": true,
+    "generate_reports": true,
+    "report_formats": ["html", "json", "markdown"]
+  },
+  "environment": {
+    "required_env_vars": [
+      "ALPACA_API_KEY",
+      "ALPACA_SECRET_KEY"
+    ],
+    "optional_env_vars": [
+      "REDIS_URL",
+      "TEST_SYMBOLS",
+      "LOG_LEVEL"
+    ]
+  },
+  "performance_thresholds": {
+    "max_memory_mb": 1024,
+    "max_cpu_percent": 80,
+    "max_duration_seconds": 3600
+  }
+}

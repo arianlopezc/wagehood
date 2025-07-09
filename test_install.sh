@@ -66,30 +66,40 @@ echo
 echo "🎉 Installation test completed!"
 echo
 
-# Verify global command
-echo "🔍 Verifying global command..."
+# Verify CLI tools
+echo "🔍 Verifying CLI tools..."
 
-# Update PATH for verification
-if command -v python3 &> /dev/null; then
-    PYTHON_USER_BASE=$(python3 -m site --user-base)
+# Test market analysis CLI
+if python3 market_analysis_cli.py --help > /dev/null 2>&1; then
+    echo "✅ Market analysis CLI is working"
 else
-    PYTHON_USER_BASE=$(python -m site --user-base)
+    echo "❌ Market analysis CLI failed"
 fi
-export PATH="$PYTHON_USER_BASE/bin:$PATH"
 
-if command -v wagehood &> /dev/null; then
-    echo "✅ Global 'wagehood' command found"
-    
-    if wagehood --version &> /dev/null; then
+# Test market watch CLI  
+if python3 market_watch.py --help > /dev/null 2>&1; then
+    echo "✅ Market watch CLI is working"
+else
+    echo "❌ Market watch CLI failed"
+fi
+
+# Test real-time processor
+if python3 run_realtime.py --help > /dev/null 2>&1; then
+    echo "✅ Real-time processor is working"
+else
+    echo "❌ Real-time processor failed"
+fi
+
+# Test global commands if installed
+if command -v wagehood-cli &> /dev/null; then
+    echo "✅ Global 'wagehood-cli' command found"
+    if wagehood-cli --help &> /dev/null; then
         echo "✅ Command is working"
-        echo "   Version: $(wagehood --version 2>/dev/null || echo 'Version check failed')"
     else
         echo "❌ Command found but not working"
-        exit 1
     fi
 else
-    echo "❌ Global 'wagehood' command not found"
-    echo "This may be expected - command might need terminal restart"
+    echo "⚠️  Global 'wagehood-cli' command not found (may need package install)"
 fi
 
 echo

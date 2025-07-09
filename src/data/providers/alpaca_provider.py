@@ -16,10 +16,11 @@ try:
     from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
     from alpaca.data.live import StockDataStream, CryptoDataStream
     from alpaca.data.requests import (
-        StockBarsRequest, StockQuotesRequest, StockTradesRequest,
-        CryptoBarsRequest, CryptoQuotesRequest, CryptoTradesRequest
+        StockBarsRequest,
+        CryptoBarsRequest
     )
     from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
+    from alpaca.data.enums import DataFeed, CryptoFeed
     from alpaca.common.exceptions import APIError
     ALPACA_AVAILABLE = True
 except ImportError:
@@ -32,7 +33,7 @@ except ImportError:
     class APIError(Exception):
         pass
 
-from src.data.providers.base import DataProvider, DataProviderError, ConnectionError, DataRetrievalError
+from src.data.providers.base import DataProvider, ConnectionError, DataRetrievalError
 from src.core.models import OHLCV, TimeFrame, MarketData
 
 logger = logging.getLogger(__name__)
@@ -76,8 +77,23 @@ class AlpacaProvider(DataProvider):
         self.api_key = self.config.get('api_key') or os.getenv('ALPACA_API_KEY')
         self.secret_key = self.config.get('secret_key') or os.getenv('ALPACA_SECRET_KEY')
         self.paper = self.config.get('paper', True)
-        self.feed = self.config.get('feed', 'iex')  # 'iex' or 'sip'
-        self.crypto_feed = self.config.get('crypto_feed', 'us')
+        
+        # Convert string feed to enum
+        feed_str = self.config.get('feed', 'iex')
+        if feed_str == 'iex':
+            self.feed = DataFeed.IEX
+        elif feed_str == 'sip':
+            self.feed = DataFeed.SIP
+        else:
+            self.feed = DataFeed.IEX  # Default to IEX
+            
+        # Convert string crypto feed to enum
+        crypto_feed_str = self.config.get('crypto_feed', 'us')
+        if crypto_feed_str == 'us':
+            self.crypto_feed = CryptoFeed.US
+        else:
+            self.crypto_feed = CryptoFeed.US  # Default to US
+            
         self.max_retries = self.config.get('max_retries', 3)
         self.retry_delay = self.config.get('retry_delay', 1.0)
         
@@ -182,13 +198,13 @@ class AlpacaProvider(DataProvider):
             # Test with a simple crypto data request (no auth required)
             request = CryptoBarsRequest(
                 symbol_or_symbols=["BTC/USD"],
-                timeframe=AlpacaTimeFrame.Day,
+                timeframe=AlpacaTimeFrame(1, TimeFrameUnit.Day),
                 start=datetime.now() - timedelta(days=2),
                 end=datetime.now() - timedelta(days=1)
             )
             
             bars = self.crypto_client.get_crypto_bars(request)
-            if not bars.df.empty:
+            if hasattr(bars, 'df') and not bars.df.empty:
                 logger.debug("Connection test successful")
             else:
                 logger.warning("Connection test returned empty data")
@@ -207,15 +223,15 @@ class AlpacaProvider(DataProvider):
             Alpaca TimeFrame object
         """
         mapping = {
-            TimeFrame.MINUTE_1: AlpacaTimeFrame.Minute,
+            TimeFrame.MINUTE_1: AlpacaTimeFrame(1, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_5: AlpacaTimeFrame(5, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_15: AlpacaTimeFrame(15, TimeFrameUnit.Minute),
             TimeFrame.MINUTE_30: AlpacaTimeFrame(30, TimeFrameUnit.Minute),
-            TimeFrame.HOUR_1: AlpacaTimeFrame.Hour,
+            TimeFrame.HOUR_1: AlpacaTimeFrame(1, TimeFrameUnit.Hour),
             TimeFrame.HOUR_4: AlpacaTimeFrame(4, TimeFrameUnit.Hour),
-            TimeFrame.DAILY: AlpacaTimeFrame.Day,
-            TimeFrame.WEEKLY: AlpacaTimeFrame.Week,
-            TimeFrame.MONTHLY: AlpacaTimeFrame.Month,
+            TimeFrame.DAILY: AlpacaTimeFrame(1, TimeFrameUnit.Day),
+            TimeFrame.WEEKLY: AlpacaTimeFrame(1, TimeFrameUnit.Week),
+            TimeFrame.MONTHLY: AlpacaTimeFrame(1, TimeFrameUnit.Month),
         }
         
         if timeframe not in mapping:
@@ -236,7 +252,6 @@ class AlpacaProvider(DataProvider):
         """
         return OHLCV(
             timestamp=bar.timestamp,
-            symbol=symbol,
             open=float(bar.open),
             high=float(bar.high),
             low=float(bar.low),
@@ -296,7 +311,35 @@ class AlpacaProvider(DataProvider):
             # Convert to OHLCV objects
             ohlcv_data = []
             
-            if symbol in bars:
+            # Handle DataFrame response format
+            if hasattr(bars, 'df') and not bars.df.empty:
+                # Data is in DataFrame format
+                df = bars.df
+                
+                # Filter for the specific symbol if multiple symbols in response
+                if 'symbol' in df.index.names:
+                    symbol_df = df.loc[symbol] if symbol in df.index.get_level_values('symbol') else df
+                else:
+                    symbol_df = df
+                
+                # Convert each row to OHLCV
+                for timestamp, row in symbol_df.iterrows():
+                    # Handle multi-index timestamp
+                    if isinstance(timestamp, tuple):
+                        timestamp = timestamp[-1]  # Get the actual timestamp
+                    
+                    ohlcv = OHLCV(
+                        timestamp=timestamp,
+                        open=float(row['open']),
+                        high=float(row['high']),
+                        low=float(row['low']),
+                        close=float(row['close']),
+                        volume=float(row['volume']) if row['volume'] is not None else 0.0
+                    )
+                    ohlcv_data.append(ohlcv)
+            
+            # Legacy format handling (in case the API returns the old format)
+            elif hasattr(bars, '__getitem__') and symbol in bars:
                 for bar in bars[symbol]:
                     ohlcv_data.append(self._alpaca_bar_to_ohlcv(bar, symbol))
             

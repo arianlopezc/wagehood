@@ -1,5 +1,5 @@
 """
-Base strategy class for all trading strategies
+Base strategy class for signal detection strategies
 """
 
 from abc import ABC, abstractmethod
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -25,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 class TradingStrategy(ABC):
-    """Abstract base class for all trading strategies"""
-    
+    """Abstract base class for all signal detection strategies"""
+
     def __init__(self, name: str, parameters: Dict[str, Any] = None):
         """
-        Initialize the trading strategy
-        
+        Initialize the signal detection strategy
+
         Args:
             name: Strategy name
             parameters: Strategy parameters dictionary
@@ -39,189 +40,206 @@ class TradingStrategy(ABC):
         self.parameters = parameters or {}
         self.indicator_calculator = IndicatorCalculator()
         self._last_signal_time = None
-        self._current_position = None
         # Cache for indicator calculations
         self._indicator_cache: Dict[str, Any] = {}
         self._cache_timestamp: Optional[datetime] = None
-        
+
     @abstractmethod
-    def generate_signals(self, data: MarketData, indicators: Dict[str, Any]) -> List[Signal]:
+    def generate_signals(
+        self, data: MarketData, indicators: Dict[str, Any]
+    ) -> List[Signal]:
         """
-        Generate trading signals based on market data and indicators
-        
+        Generate market signals based on market data and indicators
+
         Args:
             data: Market data including OHLCV
             indicators: Pre-calculated indicators
-            
+
         Returns:
-            List of trading signals
+            List of high-quality market signals
         """
         pass
-    
+
     @abstractmethod
     def get_required_indicators(self) -> List[str]:
         """
         Get list of required indicators for this strategy
-        
+
         Returns:
             List of indicator names
         """
         pass
-    
+
     @abstractmethod
     def get_parameters(self) -> Dict[str, Any]:
         """
         Get strategy parameters with descriptions and defaults
-        
+
         Returns:
             Dictionary of parameters with metadata
         """
         pass
-    
+
     def validate_signals(self, signals: List[Signal]) -> List[Signal]:
         """
-        Validate and filter signals based on strategy rules
-        
+        Validate and filter signals based on quality criteria
+
         Args:
             signals: List of raw signals
-            
+
         Returns:
-            List of validated signals
+            List of validated, high-quality signals
         """
         # Use list comprehension for better performance
-        return [
-            signal for signal in signals
-            if self._validate_signal_basic(signal) and self._validate_signal_strategy(signal)
+        validated_signals = [
+            signal
+            for signal in signals
+            if self._validate_signal_basic(signal)
+            and self._validate_signal_strategy(signal)
         ]
-    
+
+        # Additional quality validation
+        return self._enhance_signal_quality(validated_signals)
+
     def _validate_signal_basic(self, signal: Signal) -> bool:
-        """Basic signal validation"""
-        # Combined condition for better performance
-        return signal.confidence >= 0.1 and signal.price > 0
-    
+        """Basic signal validation with enhanced quality checks"""
+        # Enhanced validation for signal quality
+        return (
+            signal.confidence >= 0.3  # Higher minimum confidence
+            and signal.price > 0
+            and signal.timestamp is not None
+            and signal.signal_type in [SignalType.BUY, SignalType.SELL]
+            and signal.metadata is not None
+        )
+
     def _validate_signal_strategy(self, signal: Signal) -> bool:
         """Strategy-specific signal validation - override in subclasses"""
         return True
-    
-    def optimize_parameters(self, data: MarketData, metric: str = 'sharpe') -> Dict[str, Any]:
+
+    def optimize_parameters(
+        self, data: MarketData, metric: str = "signal_quality"
+    ) -> Dict[str, Any]:
         """
-        Optimize strategy parameters using historical data
-        
+        Optimize strategy parameters for signal quality
+
         Args:
             data: Historical market data
-            metric: Optimization metric ('sharpe', 'return', 'win_rate', 'profit_factor')
-            
+            metric: Optimization metric ('signal_quality', 'signal_count', 'confidence_avg')
+
         Returns:
             Optimized parameters dictionary
         """
         logger.info(f"Optimizing parameters for {self.name} using {metric} metric")
-        
+
         # Get parameter ranges for optimization
         param_ranges = self._get_parameter_ranges()
-        
+
         if not param_ranges:
             logger.warning(f"No parameter ranges defined for {self.name}")
             return self.parameters
-        
+
         # Simple grid search optimization
         best_params = self.parameters.copy()
-        best_score = float('-inf')
-        
+        best_score = float("-inf")
+
         # Generate parameter combinations
         param_combinations = self._generate_parameter_combinations(param_ranges)
-        
+
         for params in param_combinations:
             try:
                 # Test strategy with these parameters
                 old_params = self.parameters.copy()
                 self.parameters.update(params)
-                
-                # Calculate performance score
-                score = self._calculate_performance_score(data, metric)
-                
+
+                # Calculate signal quality score
+                score = self._calculate_signal_quality_score(data, metric)
+
                 if score > best_score:
                     best_score = score
                     best_params = params.copy()
-                
+
                 # Restore original parameters
                 self.parameters = old_params
-                
+
             except Exception as e:
                 logger.error(f"Error testing parameters {params}: {e}")
                 continue
-        
-        logger.info(f"Best parameters for {self.name}: {best_params} (score: {best_score:.4f})")
+
+        logger.info(
+            f"Best parameters for {self.name}: {best_params} (score: {best_score:.4f})"
+        )
         return best_params
-    
+
     def _get_parameter_ranges(self) -> Dict[str, List]:
         """Get parameter ranges for optimization - override in subclasses"""
         return {}
-    
-    def _generate_parameter_combinations(self, param_ranges: Dict[str, List]) -> List[Dict[str, Any]]:
+
+    def _generate_parameter_combinations(
+        self, param_ranges: Dict[str, List]
+    ) -> List[Dict[str, Any]]:
         """Generate all parameter combinations for optimization"""
         if not param_ranges:
             return [{}]
-        
+
         keys = list(param_ranges.keys())
         values = list(param_ranges.values())
-        
+
         # Use list comprehension for better performance
         return [
-            dict(zip(keys, combination))
-            for combination in itertools.product(*values)
+            dict(zip(keys, combination)) for combination in itertools.product(*values)
         ]
-    
-    def _calculate_performance_score(self, data: MarketData, metric: str) -> float:
-        """Calculate performance score for optimization"""
+
+    def _calculate_signal_quality_score(self, data: MarketData, metric: str) -> float:
+        """Calculate signal quality score for optimization"""
         try:
             # Generate signals for the data
             indicators = self._calculate_indicators(data)
             signals = self.generate_signals(data, indicators)
-            
+
             if not signals:
-                return float('-inf')
-            
-            # Simple performance calculation
-            if metric == 'sharpe':
-                return self._calculate_sharpe_ratio(signals, data)
-            elif metric == 'return':
-                return self._calculate_total_return(signals, data)
-            elif metric == 'win_rate':
-                return self._calculate_win_rate(signals, data)
-            elif metric == 'profit_factor':
-                return self._calculate_profit_factor(signals, data)
+                return float("-inf")
+
+            # Calculate signal quality metrics
+            if metric == "signal_quality":
+                return self._calculate_overall_signal_quality(signals)
+            elif metric == "signal_count":
+                return len(signals)
+            elif metric == "confidence_avg":
+                return sum(s.confidence for s in signals) / len(signals)
             else:
-                return float('-inf')
-                
+                return float("-inf")
+
         except Exception as e:
-            logger.error(f"Error calculating performance score: {e}")
-            return float('-inf')
-    
+            logger.error(f"Error calculating signal quality score: {e}")
+            return float("-inf")
+
     def _calculate_indicators(self, data: MarketData) -> Dict[str, Any]:
         """Calculate all required indicators for the strategy"""
         # Check cache first
-        if (self._cache_timestamp and 
-            data.last_updated == self._cache_timestamp and 
-            self._indicator_cache):
+        if (
+            self._cache_timestamp
+            and data.last_updated == self._cache_timestamp
+            and self._indicator_cache
+        ):
             return self._indicator_cache
-        
+
         indicators = {}
         required_indicators = self.get_required_indicators()
-        
+
         # Convert data to arrays once
         arrays = data.to_arrays()
-        close_prices = arrays['close']
-        
+        close_prices = arrays["close"]
+
         # Define indicator mapping for cleaner code
         indicator_calculators = {
-            'sma': lambda: self._calculate_sma(close_prices),
-            'ema': lambda: self._calculate_ema(close_prices),
-            'rsi': lambda: self._calculate_rsi(close_prices),
-            'macd': lambda: self._calculate_macd(close_prices),
-            'bollinger': lambda: self._calculate_bollinger_bands(close_prices),
-            'support_resistance': lambda: self._calculate_support_resistance(arrays)
+            "sma": lambda: self._calculate_sma(close_prices),
+            "ema": lambda: self._calculate_ema(close_prices),
+            "rsi": lambda: self._calculate_rsi(close_prices),
+            "macd": lambda: self._calculate_macd(close_prices),
+            "bollinger": lambda: self._calculate_bollinger_bands(close_prices),
+            "support_resistance": lambda: self._calculate_support_resistance(arrays),
         }
-        
+
         for indicator in required_indicators:
             if indicator in indicator_calculators:
                 try:
@@ -229,183 +247,197 @@ class TradingStrategy(ABC):
                 except Exception as e:
                     logger.error(f"Error calculating {indicator}: {e}")
                     continue
-        
+
         # Update cache
         self._indicator_cache = indicators
         self._cache_timestamp = data.last_updated
-        
+
         return indicators
-    
+
     @lru_cache(maxsize=32)
     def _get_common_periods(self, indicator_type: str) -> Tuple[int, ...]:
         """Get common periods for indicators"""
-        if indicator_type == 'sma':
+        if indicator_type == "sma":
             return (20, 50, 100, 200)
-        elif indicator_type == 'ema':
+        elif indicator_type == "ema":
             return (12, 26, 50, 200)
-        elif indicator_type == 'rsi':
+        elif indicator_type == "rsi":
             return (14, 21)
-        elif indicator_type == 'bollinger':
+        elif indicator_type == "bollinger":
             return (20, 50)
         return ()
-    
-    def _calculate_sma(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
+
+    def _calculate_sma(
+        self, close_prices: Union[List[float], "np.ndarray"]
+    ) -> Dict[str, Any]:
         """Calculate Simple Moving Average"""
         from ..indicators.moving_averages import calculate_sma
-        
+
         results = {}
         data_len = len(close_prices)
-        
+
         # Only calculate for periods that have enough data
-        for period in self._get_common_periods('sma'):
+        for period in self._get_common_periods("sma"):
             if period <= data_len:
-                results[f'sma_{period}'] = calculate_sma(close_prices, period)
-        
+                results[f"sma_{period}"] = calculate_sma(close_prices, period)
+
         return results
-    
-    def _calculate_ema(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
+
+    def _calculate_ema(
+        self, close_prices: Union[List[float], "np.ndarray"]
+    ) -> Dict[str, Any]:
         """Calculate Exponential Moving Average"""
         from ..indicators.moving_averages import calculate_ema
-        
+
         results = {}
         data_len = len(close_prices)
-        
-        for period in self._get_common_periods('ema'):
+
+        for period in self._get_common_periods("ema"):
             if period <= data_len:
-                results[f'ema_{period}'] = calculate_ema(close_prices, period)
-        
+                results[f"ema_{period}"] = calculate_ema(close_prices, period)
+
         return results
-    
-    def _calculate_rsi(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
+
+    def _calculate_rsi(
+        self, close_prices: Union[List[float], "np.ndarray"]
+    ) -> Dict[str, Any]:
         """Calculate RSI"""
         from ..indicators.momentum import calculate_rsi
-        
+
         results = {}
         data_len = len(close_prices)
-        
-        for period in self._get_common_periods('rsi'):
+
+        # Calculate RSI for common periods
+        for period in self._get_common_periods("rsi"):
             if period <= data_len:
-                results[f'rsi_{period}'] = calculate_rsi(close_prices, period)
-        
+                results[f"rsi_{period}"] = calculate_rsi(close_prices, period)
+
+        # Calculate RSI for strategy-specific periods if they exist
+        if hasattr(self, "parameters") and self.parameters:
+            # Check for strategy-specific RSI period
+            if "rsi_period" in self.parameters:
+                rsi_period = self.parameters["rsi_period"]
+                if rsi_period <= data_len and f"rsi_{rsi_period}" not in results:
+                    results[f"rsi_{rsi_period}"] = calculate_rsi(
+                        close_prices, rsi_period
+                    )
+
         return results
-    
-    def _calculate_macd(self, close_prices: Union[List[float], np.ndarray]) -> Dict[str, Any]:
+
+    def _calculate_macd(
+        self, close_prices: Union[List[float], np.ndarray]
+    ) -> Dict[str, Any]:
         """Calculate MACD"""
         from ..indicators.momentum import calculate_macd
-        
-        if len(close_prices) >= 26:
-            macd_data = calculate_macd(close_prices, 12, 26, 9)
-            return {'macd': macd_data}
-        
+
+        # Use strategy-specific parameters if available, otherwise use defaults
+        fast_period = 12
+        slow_period = 26
+        signal_period = 9
+
+        if hasattr(self, "parameters") and self.parameters:
+            fast_period = self.parameters.get("macd_fast", 12)
+            slow_period = self.parameters.get("macd_slow", 26)
+            signal_period = self.parameters.get("macd_signal", 9)
+
+        if len(close_prices) >= slow_period:
+            macd_line, signal_line, histogram = calculate_macd(
+                close_prices, fast_period, slow_period, signal_period
+            )
+            # Structure the data as expected by strategies
+            return {
+                "macd": {
+                    "macd": macd_line,
+                    "signal": signal_line,
+                    "histogram": histogram,
+                }
+            }
+
         return {}
-    
-    def _calculate_bollinger_bands(self, close_prices: Union[List[float], 'np.ndarray']) -> Dict[str, Any]:
+
+    def _calculate_bollinger_bands(
+        self, close_prices: Union[List[float], "np.ndarray"]
+    ) -> Dict[str, Any]:
         """Calculate Bollinger Bands"""
         from ..indicators.volatility import calculate_bollinger_bands
-        
+
         results = {}
         data_len = len(close_prices)
-        
-        for period in self._get_common_periods('bollinger'):
+
+        for period in self._get_common_periods("bollinger"):
             if period <= data_len:
-                results[f'bollinger_{period}'] = calculate_bollinger_bands(close_prices, period, 2.0)
-        
+                upper_band, middle_band, lower_band = calculate_bollinger_bands(
+                    close_prices, period, 2.0
+                )
+                # Structure the data as expected by strategies
+                results[f"bollinger_{period}"] = {
+                    "upper": upper_band,
+                    "middle": middle_band,
+                    "lower": lower_band,
+                }
+
         return results
-    
+
     def _calculate_support_resistance(self, arrays: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate Support and Resistance levels"""
         from ..indicators.levels import calculate_support_resistance
-        
-        if len(arrays['high']) >= 20:
-            return calculate_support_resistance(arrays['high'], arrays['low'], arrays['close'])
-        
+
+        if len(arrays["close"]) >= 20:
+            # Use close prices for support/resistance calculation
+            return calculate_support_resistance(
+                arrays["close"], lookback=20, min_touches=3
+            )
+
         return {}
-    
-    def _calculate_sharpe_ratio(self, signals: List[Signal], data: MarketData) -> float:
-        """Calculate Sharpe ratio from signals"""
-        # Simplified Sharpe ratio calculation
-        returns = self._calculate_signal_returns(signals, data)
-        if not returns or len(returns) < 2:
-            return 0.0
-        
-        if HAS_NUMPY:
-            avg_return = np.mean(returns)
-            std_return = np.std(returns)
-        else:
-            # Pure Python fallback
-            avg_return = sum(returns) / len(returns)
-            variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
-            std_return = variance ** 0.5
-        
-        if std_return == 0:
-            return 0.0
-        
-        return avg_return / std_return
-    
-    def _calculate_total_return(self, signals: List[Signal], data: MarketData) -> float:
-        """Calculate total return from signals"""
-        returns = self._calculate_signal_returns(signals, data)
-        if not returns:
-            return 0.0
-        
-        return sum(returns)
-    
-    def _calculate_win_rate(self, signals: List[Signal], data: MarketData) -> float:
-        """Calculate win rate from signals"""
-        returns = self._calculate_signal_returns(signals, data)
-        if not returns:
-            return 0.0
-        
-        winning_trades = sum(1 for r in returns if r > 0)
-        return winning_trades / len(returns)
-    
-    def _calculate_profit_factor(self, signals: List[Signal], data: MarketData) -> float:
-        """Calculate profit factor from signals"""
-        returns = self._calculate_signal_returns(signals, data)
-        if not returns:
-            return 0.0
-        
-        gross_profit = sum(r for r in returns if r > 0)
-        gross_loss = abs(sum(r for r in returns if r < 0))
-        
-        if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
-        
-        return gross_profit / gross_loss
-    
-    def _calculate_signal_returns(self, signals: List[Signal], data: MarketData) -> List[float]:
-        """Calculate returns from signals - simplified implementation"""
+
+    def _calculate_overall_signal_quality(self, signals: List[Signal]) -> float:
+        """Calculate overall signal quality score"""
         if not signals:
-            return []
-        
-        returns = []
-        entry_price = None
-        
-        # Process signals efficiently
+            return 0.0
+
+        quality_factors = []
+
         for signal in signals:
-            if signal.signal_type == SignalType.BUY and entry_price is None:
-                entry_price = signal.price
-            elif entry_price is not None and signal.signal_type in (SignalType.SELL, SignalType.CLOSE_LONG):
-                # Calculate return percentage
-                returns.append((signal.price - entry_price) / entry_price)
-                entry_price = None
-        
-        return returns
-    
-    def calculate_confidence(self, conditions: Dict[str, float], weights: Dict[str, float] = None) -> float:
+            # Calculate individual signal quality
+            confidence_score = signal.confidence
+
+            # Check for signal timing quality
+            timing_score = self._assess_signal_timing(signal)
+
+            # Check for signal context quality
+            context_score = self._assess_signal_context(signal)
+
+            # Check for signal validation quality
+            validation_score = self._assess_signal_validation(signal)
+
+            # Combined quality score
+            signal_quality = (
+                confidence_score * 0.4
+                + timing_score * 0.25
+                + context_score * 0.2
+                + validation_score * 0.15
+            )
+
+            quality_factors.append(signal_quality)
+
+        return sum(quality_factors) / len(quality_factors)
+
+    def calculate_confidence(
+        self, conditions: Dict[str, float], weights: Dict[str, float] = None
+    ) -> float:
         """
-        Calculate signal confidence based on multiple conditions
-        
+        Calculate signal confidence based on multiple conditions with enhanced quality assessment
+
         Args:
             conditions: Dictionary of condition names and their strength (0.0 to 1.0)
             weights: Optional weights for each condition
-            
+
         Returns:
             Confidence score (0.0 to 1.0)
         """
         if not conditions:
             return 0.0
-        
+
         # Use default weights if not provided
         if weights is None:
             total_weight = len(conditions)
@@ -418,34 +450,166 @@ class TradingStrategy(ABC):
                 weight = weights.get(key, 1.0)
                 weighted_sum += value * weight
                 total_weight += weight
-        
+
         if total_weight == 0:
             return 0.0
-        
-        # Calculate and clamp confidence
-        confidence = weighted_sum / total_weight
-        return max(0.0, min(1.0, confidence))  # Clamp between 0 and 1
-    
+
+        # Calculate base confidence
+        base_confidence = weighted_sum / total_weight
+
+        # Apply quality enhancement
+        enhanced_confidence = self._enhance_confidence_quality(
+            base_confidence, conditions
+        )
+
+        # Clamp between 0 and 1
+        return max(0.0, min(1.0, enhanced_confidence))
+
     def get_signal_metadata(self, **kwargs) -> Dict[str, Any]:
         """
-        Generate metadata for signals
-        
+        Generate enhanced metadata for signals with quality indicators
+
         Args:
             **kwargs: Additional metadata fields
-            
+
         Returns:
-            Metadata dictionary
+            Enhanced metadata dictionary
         """
         metadata = {
-            'strategy': self.name,
-            'parameters': self.parameters.copy(),
-            'timestamp': datetime.now().isoformat(),
+            "strategy": self.name,
+            "parameters": self.parameters.copy(),
+            "timestamp": datetime.now().isoformat(),
+            "signal_quality": self._calculate_signal_quality_metadata(kwargs),
+            "market_context": self._get_market_context_metadata(),
         }
         metadata.update(kwargs)
         return metadata
-    
+
+    def _calculate_signal_quality_metadata(
+        self, signal_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Calculate signal quality metadata"""
+        quality_indicators = {
+            "indicator_count": len(
+                [k for k in signal_data.keys() if "indicator" in k.lower()]
+            ),
+            "confirmation_count": len(
+                [k for k in signal_data.keys() if "confirmation" in k.lower()]
+            ),
+            "has_volume_confirmation": "volume_confirmation" in signal_data,
+            "has_trend_confirmation": any(
+                "trend" in k.lower() for k in signal_data.keys()
+            ),
+        }
+
+        # Calculate overall quality score
+        quality_score = (
+            quality_indicators["indicator_count"] * 0.3
+            + quality_indicators["confirmation_count"] * 0.3
+            + (1.0 if quality_indicators["has_volume_confirmation"] else 0.0) * 0.2
+            + (1.0 if quality_indicators["has_trend_confirmation"] else 0.0) * 0.2
+        )
+
+        quality_indicators["quality_score"] = min(1.0, quality_score)
+        return quality_indicators
+
+    def _get_market_context_metadata(self) -> Dict[str, Any]:
+        """Get market context metadata"""
+        return {
+            "analysis_time": datetime.now().isoformat(),
+            "strategy_type": "signal_detection",
+            "optimization_target": "signal_quality",
+        }
+
+    def _enhance_signal_quality(self, signals: List[Signal]) -> List[Signal]:
+        """Enhance signal quality through additional filtering and validation"""
+        if not signals:
+            return signals
+
+        # Sort by confidence (highest first)
+        sorted_signals = sorted(signals, key=lambda s: s.confidence, reverse=True)
+
+        # Apply quality enhancements
+        enhanced_signals = []
+        for signal in sorted_signals:
+            # Skip low-quality signals
+            if signal.confidence < 0.4:
+                continue
+
+            # Add signal strength indicators
+            signal.metadata["signal_strength"] = self._calculate_signal_strength(signal)
+
+            # Add market timing assessment
+            signal.metadata["timing_quality"] = self._assess_signal_timing(signal)
+
+            enhanced_signals.append(signal)
+
+        return enhanced_signals
+
+    def _calculate_signal_strength(self, signal: Signal) -> str:
+        """Calculate signal strength category"""
+        if signal.confidence >= 0.8:
+            return "strong"
+        elif signal.confidence >= 0.6:
+            return "moderate"
+        else:
+            return "weak"
+
+    def _assess_signal_timing(self, signal: Signal) -> float:
+        """Assess signal timing quality"""
+        # Basic timing assessment - can be overridden by subclasses
+        if signal.timestamp is None:
+            return 0.0
+
+        # Signal is recent and well-timed
+        return 0.8
+
+    def _assess_signal_context(self, signal: Signal) -> float:
+        """Assess signal context quality"""
+        # Check metadata richness and context
+        if not signal.metadata:
+            return 0.0
+
+        # Count meaningful metadata fields
+        meaningful_fields = ["signal_name", "trend", "momentum", "volume_confirmation"]
+        present_fields = sum(
+            1 for field in meaningful_fields if field in signal.metadata
+        )
+
+        return present_fields / len(meaningful_fields)
+
+    def _assess_signal_validation(self, signal: Signal) -> float:
+        """Assess signal validation quality"""
+        # Check if signal meets validation criteria
+        if signal.confidence < 0.5:
+            return 0.0
+
+        # Higher confidence signals get better validation scores
+        return min(1.0, signal.confidence * 1.2)
+
+    def _enhance_confidence_quality(
+        self, base_confidence: float, conditions: Dict[str, float]
+    ) -> float:
+        """Enhance confidence based on signal quality factors"""
+        # Quality multiplier based on conditions diversity
+        condition_count = len(conditions)
+        diversity_bonus = min(0.1, condition_count * 0.02)
+
+        # Consistency bonus if all conditions are strong
+        min_condition = min(conditions.values())
+        consistency_bonus = min(0.1, min_condition * 0.2)
+
+        # Apply enhancements
+        enhanced = base_confidence + diversity_bonus + consistency_bonus
+
+        # Penalty for very low base confidence
+        if base_confidence < 0.3:
+            enhanced *= 0.8
+
+        return enhanced
+
     def __str__(self) -> str:
         return f"{self.name}({self.parameters})"
-    
+
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {self.name}>"

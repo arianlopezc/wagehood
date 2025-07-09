@@ -288,8 +288,8 @@ async def main():
         logger.info("\nNext steps:")
         logger.info("1. Update your .env file with the correct API keys")
         logger.info("2. Run the real-time data ingestion: python run_realtime.py")
-        logger.info("3. Test the API endpoints: python -m uvicorn src.api.app:app --reload")
-        logger.info("4. Use the CLI tool: ./wagehood_cli.py --help")
+        logger.info("3. Use the CLI tool: python market_analysis_cli.py --help")
+        logger.info("4. View market data: python market_watch.py")
         return 0
     else:
         logger.error("❌ Some tests failed. Please check the error messages above.")

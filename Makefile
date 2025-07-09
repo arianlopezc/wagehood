@@ -34,8 +34,7 @@ format:
 check: format lint test
 
 # Application targets
-run-api:
-	python -m src.api.app
+# API removed - system uses Redis-based worker model
 
 run-tests:
 	python run_tests.py --all --coverage
@@ -52,7 +51,7 @@ generate-data:
 
 # Documentation targets
 docs:
-	@echo "API Documentation: http://localhost:8000/docs (start API first)"
+	@echo "System Documentation: See README.md for worker-based architecture"
 	@echo "Research Documentation: .local/"
 	@echo "Technical Documentation: README.md"
 
@@ -95,7 +94,7 @@ help:
 	@echo "  lint             Run code linting"
 	@echo "  format           Format code with black and isort"
 	@echo "  check            Run format, lint, and test"
-	@echo "  run-api          Start the API server"
+	@echo "  run-realtime     Start the worker service"
 	@echo "  run-tests        Run comprehensive test suite"
 	@echo "  benchmark        Run performance benchmarks"
 	@echo "  backtest         Run example backtest analysis"
