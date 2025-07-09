@@ -14,7 +14,7 @@ from datetime import datetime
 from .base import TradingStrategy
 
 # Note: Signal types are simplified to basic Python types since core.models doesn't exist
-from ..indicators.momentum import calculate_macd, calculate_rsi
+from ..indicators.talib_wrapper import calculate_macd, calculate_rsi
 
 logger = logging.getLogger(__name__)
 

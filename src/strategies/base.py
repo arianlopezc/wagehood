@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional, Union, Tuple, TYPE_CHECKING
 import logging
 from datetime import datetime
 import itertools
-from functools import lru_cache
 
 if TYPE_CHECKING:
     import numpy as np
@@ -40,9 +39,6 @@ class TradingStrategy(ABC):
         self.parameters = parameters or {}
         self.indicator_calculator = IndicatorCalculator()
         self._last_signal_time = None
-        # Cache for indicator calculations
-        self._indicator_cache: Dict[str, Any] = {}
-        self._cache_timestamp: Optional[datetime] = None
 
     @abstractmethod
     def generate_signals(
@@ -217,14 +213,6 @@ class TradingStrategy(ABC):
 
     def _calculate_indicators(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate all required indicators for the strategy"""
-        # Check cache first
-        if (
-            self._cache_timestamp
-            and data.get("last_updated") == self._cache_timestamp
-            and self._indicator_cache
-        ):
-            return self._indicator_cache
-
         indicators = {}
         required_indicators = self.get_required_indicators()
 
@@ -250,13 +238,8 @@ class TradingStrategy(ABC):
                     logger.error(f"Error calculating {indicator}: {e}")
                     continue
 
-        # Update cache
-        self._indicator_cache = indicators
-        self._cache_timestamp = data.get("last_updated")
-
         return indicators
 
-    @lru_cache(maxsize=32)
     def _get_common_periods(self, indicator_type: str) -> Tuple[int, ...]:
         """Get common periods for indicators"""
         if indicator_type == "sma":
@@ -361,7 +344,7 @@ class TradingStrategy(ABC):
         self, close_prices: Union[List[float], "np.ndarray"]
     ) -> Dict[str, Any]:
         """Calculate Bollinger Bands"""
-        from ..indicators.volatility import calculate_bollinger_bands
+        from ..indicators.talib_wrapper import calculate_bb as calculate_bollinger_bands
 
         results = {}
         data_len = len(close_prices)

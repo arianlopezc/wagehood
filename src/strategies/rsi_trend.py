@@ -480,12 +480,10 @@ class RSITrendFollowing(TradingStrategy):
     def _calculate_price_momentum_optimized(
         self, data: Dict[str, Any], index: int, trend_type: str
     ) -> float:
-        """Optimized price momentum calculation with caching."""
-        # Cache arrays for performance
-        if not hasattr(self, "_cached_arrays") or self._cached_arrays is None:
-            self._cached_arrays = data.to_arrays()
-
-        close_prices = self._cached_arrays["close"]
+        """Calculate price momentum."""
+        # Get arrays directly
+        arrays = data.to_arrays()
+        close_prices = arrays["close"]
         lookback = min(5, index)
 
         if lookback < 2 or index >= len(close_prices):
@@ -526,11 +524,9 @@ class RSITrendFollowing(TradingStrategy):
         if index < 20:
             return None
 
-        # Cache arrays for performance
-        if not hasattr(self, "_cached_arrays") or self._cached_arrays is None:
-            self._cached_arrays = data.to_arrays()
-
-        close_prices = self._cached_arrays["close"]
+        # Get arrays directly
+        arrays = data.to_arrays()
+        close_prices = arrays["close"]
         lookback = min(10, index)
         start_idx = index - lookback
 
@@ -592,15 +588,14 @@ class RSITrendFollowing(TradingStrategy):
         if confidence < self._min_confidence:
             return None
 
-        # Cache arrays for performance
-        if not hasattr(self, "_cached_arrays") or self._cached_arrays is None:
-            self._cached_arrays = data.to_arrays()
+        # Get arrays directly
+        arrays = data.to_arrays()
 
         return {
-            "timestamp": self._cached_arrays["timestamp"][index],
+            "timestamp": arrays["timestamp"][index],
             "symbol": data.get("symbol", "UNKNOWN"),
             "signal_type": "BUY" if direction == "bullish" else "SELL",
-            "price": self._cached_arrays["close"][index],
+            "price": arrays["close"][index],
             "confidence": confidence,
             "strategy_name": self.name,
             "metadata": {
@@ -676,14 +671,6 @@ class RSITrendFollowing(TradingStrategy):
 
         return metadata["signal_name"] in valid_names
 
-    def reset_cache(self):
-        """Reset internal cache for new data processing."""
-        if hasattr(self, "_cached_arrays"):
-            self._cached_arrays = None
-
-    def __del__(self):
-        """Clean up resources when strategy is destroyed."""
-        self.reset_cache()
 
     def _determine_trend(self, rsi_values: np.ndarray, index: int) -> str:
         """Determine trend for a specific index (for backward compatibility)."""

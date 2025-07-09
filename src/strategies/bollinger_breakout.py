@@ -13,7 +13,7 @@ from datetime import datetime
 from .base import TradingStrategy
 
 # Note: Signal types are simplified to basic Python types since core.models doesn't exist
-from ..indicators.volatility import calculate_bollinger_bands
+from ..indicators.talib_wrapper import calculate_bb as calculate_bollinger_bands
 
 logger = logging.getLogger(__name__)
 
