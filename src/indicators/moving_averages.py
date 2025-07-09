@@ -7,6 +7,7 @@ Exponential Moving Average (EMA), Weighted Moving Average (WMA), and Volume Weig
 
 import numpy as np
 from typing import Union, Optional
+
 # Constants - previously imported from ..core.constants
 MA_FAST = 12
 MA_SLOW = 26

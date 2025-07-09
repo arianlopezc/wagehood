@@ -105,11 +105,11 @@ class TradingStrategy(ABC):
         """Basic signal validation with enhanced quality checks"""
         # Enhanced validation for signal quality
         return (
-            signal.get('confidence', 0) >= 0.3  # Higher minimum confidence
-            and signal.get('price', 0) > 0
-            and signal.get('timestamp') is not None
-            and signal.get('signal_type') in ['BUY', 'SELL']
-            and signal.get('metadata') is not None
+            signal.get("confidence", 0) >= 0.3  # Higher minimum confidence
+            and signal.get("price", 0) > 0
+            and signal.get("timestamp") is not None
+            and signal.get("signal_type") in ["BUY", "SELL"]
+            and signal.get("metadata") is not None
         )
 
     def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
@@ -189,7 +189,9 @@ class TradingStrategy(ABC):
             dict(zip(keys, combination)) for combination in itertools.product(*values)
         ]
 
-    def _calculate_signal_quality_score(self, data: Dict[str, Any], metric: str) -> float:
+    def _calculate_signal_quality_score(
+        self, data: Dict[str, Any], metric: str
+    ) -> float:
         """Calculate signal quality score for optimization"""
         try:
             # Generate signals for the data
@@ -205,7 +207,7 @@ class TradingStrategy(ABC):
             elif metric == "signal_count":
                 return len(signals)
             elif metric == "confidence_avg":
-                return sum(s.get('confidence', 0) for s in signals) / len(signals)
+                return sum(s.get("confidence", 0) for s in signals) / len(signals)
             else:
                 return float("-inf")
 
@@ -218,7 +220,7 @@ class TradingStrategy(ABC):
         # Check cache first
         if (
             self._cache_timestamp
-            and data.get('last_updated') == self._cache_timestamp
+            and data.get("last_updated") == self._cache_timestamp
             and self._indicator_cache
         ):
             return self._indicator_cache
@@ -227,8 +229,8 @@ class TradingStrategy(ABC):
         required_indicators = self.get_required_indicators()
 
         # Convert data to arrays once
-        arrays = data.get('data', [])
-        close_prices = [item.get('close', 0) for item in arrays] if arrays else []
+        arrays = data.get("data", [])
+        close_prices = [item.get("close", 0) for item in arrays] if arrays else []
 
         # Define indicator mapping for cleaner code
         indicator_calculators = {
@@ -250,7 +252,7 @@ class TradingStrategy(ABC):
 
         # Update cache
         self._indicator_cache = indicators
-        self._cache_timestamp = data.get('last_updated')
+        self._cache_timestamp = data.get("last_updated")
 
         return indicators
 
@@ -302,7 +304,7 @@ class TradingStrategy(ABC):
         self, close_prices: Union[List[float], "np.ndarray"]
     ) -> Dict[str, Any]:
         """Calculate RSI"""
-        from ..indicators.momentum import calculate_rsi
+        from ..indicators.talib_wrapper import calculate_rsi
 
         results = {}
         data_len = len(close_prices)
@@ -328,7 +330,7 @@ class TradingStrategy(ABC):
         self, close_prices: Union[List[float], np.ndarray]
     ) -> Dict[str, Any]:
         """Calculate MACD"""
-        from ..indicators.momentum import calculate_macd
+        from ..indicators.talib_wrapper import calculate_macd
 
         # Use strategy-specific parameters if available, otherwise use defaults
         fast_period = 12
@@ -521,13 +523,17 @@ class TradingStrategy(ABC):
             "optimization_target": "signal_quality",
         }
 
-    def _enhance_signal_quality(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _enhance_signal_quality(
+        self, signals: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Enhance signal quality through additional filtering and validation"""
         if not signals:
             return signals
 
         # Sort by confidence (highest first)
-        sorted_signals = sorted(signals, key=lambda s: s.get("confidence", 0), reverse=True)
+        sorted_signals = sorted(
+            signals, key=lambda s: s.get("confidence", 0), reverse=True
+        )
 
         # Apply quality enhancements
         enhanced_signals = []
@@ -537,7 +543,9 @@ class TradingStrategy(ABC):
                 continue
 
             # Add signal strength indicators
-            signal["metadata"]["signal_strength"] = self._calculate_signal_strength(signal)
+            signal["metadata"]["signal_strength"] = self._calculate_signal_strength(
+                signal
+            )
 
             # Add market timing assessment
             signal["metadata"]["timing_quality"] = self._assess_signal_timing(signal)
@@ -581,11 +589,11 @@ class TradingStrategy(ABC):
     def _assess_signal_validation(self, signal: Dict[str, Any]) -> float:
         """Assess signal validation quality"""
         # Check if signal meets validation criteria
-        if signal.get('confidence', 0) < 0.5:
+        if signal.get("confidence", 0) < 0.5:
             return 0.0
 
         # Higher confidence signals get better validation scores
-        return min(1.0, signal.get('confidence', 0) * 1.2)
+        return min(1.0, signal.get("confidence", 0) * 1.2)
 
     def _enhance_confidence_quality(
         self, base_confidence: float, conditions: Dict[str, float]

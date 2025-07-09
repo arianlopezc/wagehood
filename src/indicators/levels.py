@@ -8,6 +8,7 @@ pivot points, and Fibonacci retracements in price data.
 import numpy as np
 from typing import Union, List, Tuple, Optional, Dict
 from scipy.signal import argrelextrema
+
 # Constants - previously imported from ..core.constants
 MIN_DATA_POINTS = 50
 

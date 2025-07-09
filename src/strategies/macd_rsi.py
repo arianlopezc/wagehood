@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
+
 # Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.momentum import calculate_macd, calculate_rsi
 
@@ -572,7 +573,9 @@ class MACDRSIStrategy(TradingStrategy):
 
         return trend_strength
 
-    def _calculate_signal_timing_quality(self, data: Dict[str, Any], index: int) -> float:
+    def _calculate_signal_timing_quality(
+        self, data: Dict[str, Any], index: int
+    ) -> float:
         """Calculate signal timing quality based on market conditions"""
 
         arrays = data.to_arrays()

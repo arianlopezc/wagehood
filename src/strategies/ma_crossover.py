@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
+
 # Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.moving_averages import calculate_ema
 

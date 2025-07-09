@@ -10,6 +10,7 @@ import logging
 from typing import Union, Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from functools import lru_cache
+
 # Constants - previously imported from ..core.constants
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
@@ -58,7 +59,7 @@ from .levels import (
     calculate_support_resistance,
     calculate_pivot_points,
     calculate_fibonacci_retracements,
-    )
+)
 
 
 class IndicatorCalculator:

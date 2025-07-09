@@ -1,28 +1,31 @@
 """
-Momentum Indicators
+TA-Lib Wrapper for Technical Indicators
 
-This module implements momentum-based technical indicators including RSI, MACD,
-Stochastic Oscillator, Williams %R, and Commodity Channel Index (CCI).
+This module provides a wrapper around TA-Lib functions to maintain API compatibility
+with the existing custom implementations while using industry-standard calculations.
 """
 
 import numpy as np
+import talib
 from typing import Union, Tuple, Optional
+import logging
 
-# Constants - previously imported from ..core.constants
+logger = logging.getLogger(__name__)
+
+# Constants from the original momentum.py
 RSI_PERIOD = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 MACD_FAST = 12
 MACD_SLOW = 26
 MACD_SIGNAL = 9
-from .moving_averages import calculate_ema, calculate_sma
 
 
 def calculate_rsi(
     data: Union[np.ndarray, list], period: int = RSI_PERIOD
 ) -> np.ndarray:
     """
-    Calculate Relative Strength Index (RSI).
+    Calculate Relative Strength Index (RSI) using TA-Lib.
 
     RSI measures the speed and change of price movements, oscillating between 0 and 100.
     Values above 70 typically indicate overbought conditions, below 30 indicate oversold.
@@ -51,48 +54,13 @@ def calculate_rsi(
             f"Insufficient data: need {period + 1} points, got {len(data_array)}"
         )
 
-    # Calculate price changes
-    delta = np.diff(data_array)
-
-    # Separate gains and losses
-    gains = np.where(delta > 0, delta, 0)
-    losses = np.where(delta < 0, -delta, 0)
-
-    # Initialize result array with NaN
-    result = np.full(len(data_array), np.nan)
-
-    # Calculate initial average gain and loss
-    if len(gains) >= period:
-        avg_gain = np.mean(gains[:period])
-        avg_loss = np.mean(losses[:period])
-
-        # Calculate RSI for the first valid point
-        if avg_loss == 0 and avg_gain == 0:
-            result[period] = 50.0  # Neutral for no price movement
-        elif avg_loss == 0:
-            result[period] = 100.0  # Only gains, no losses
-        else:
-            rs = avg_gain / avg_loss
-            result[period] = 100.0 - (100.0 / (1 + rs))
-
-        # Calculate RSI for subsequent points using smoothed averages
-        for i in range(period + 1, len(data_array)):
-            gain_idx = i - 1
-            loss_idx = i - 1
-
-            # Smoothed average calculation (Wilder's method)
-            avg_gain = (avg_gain * (period - 1) + gains[gain_idx]) / period
-            avg_loss = (avg_loss * (period - 1) + losses[loss_idx]) / period
-
-            if avg_loss == 0 and avg_gain == 0:
-                result[i] = 50.0  # Neutral for no price movement
-            elif avg_loss == 0:
-                result[i] = 100.0  # Only gains, no losses
-            else:
-                rs = avg_gain / avg_loss
-                result[i] = 100.0 - (100.0 / (1 + rs))
-
-    return result
+    try:
+        # Use TA-Lib for RSI calculation
+        rsi = talib.RSI(data_array, timeperiod=period)
+        return rsi
+    except Exception as e:
+        logger.error(f"TA-Lib RSI calculation failed: {e}")
+        raise
 
 
 def calculate_macd(
@@ -102,7 +70,7 @@ def calculate_macd(
     signal: int = MACD_SIGNAL,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Calculate MACD (Moving Average Convergence Divergence).
+    Calculate MACD (Moving Average Convergence Divergence) using TA-Lib.
 
     MACD consists of:
     - MACD Line: Difference between fast EMA and slow EMA
@@ -138,33 +106,15 @@ def calculate_macd(
             f"Insufficient data: need {slow} points, got {len(data_array)}"
         )
 
-    # Calculate fast and slow EMAs
-    fast_ema = calculate_ema(data_array, fast)
-    slow_ema = calculate_ema(data_array, slow)
-
-    # Calculate MACD line
-    macd_line = fast_ema - slow_ema
-
-    # Calculate signal line (EMA of MACD line)
-    # Need to handle NaN values in MACD line
-    valid_macd_start = slow - 1  # First valid MACD value index
-    signal_line = np.full(len(data_array), np.nan)
-
-    if len(data_array) > valid_macd_start + signal - 1:
-        # Extract valid MACD values for signal calculation
-        valid_macd = macd_line[valid_macd_start:]
-        valid_macd_clean = valid_macd[~np.isnan(valid_macd)]
-
-        if len(valid_macd_clean) >= signal:
-            signal_ema = calculate_ema(valid_macd_clean, signal)
-            signal_line[valid_macd_start : valid_macd_start + len(signal_ema)] = (
-                signal_ema
-            )
-
-    # Calculate histogram
-    histogram = macd_line - signal_line
-
-    return macd_line, signal_line, histogram
+    try:
+        # Use TA-Lib for MACD calculation
+        macd_line, signal_line, histogram = talib.MACD(
+            data_array, fastperiod=fast, slowperiod=slow, signalperiod=signal
+        )
+        return macd_line, signal_line, histogram
+    except Exception as e:
+        logger.error(f"TA-Lib MACD calculation failed: {e}")
+        raise
 
 
 def calculate_stochastic(
@@ -176,7 +126,7 @@ def calculate_stochastic(
     smooth_k: int = 3,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Calculate Stochastic Oscillator.
+    Calculate Stochastic Oscillator using TA-Lib.
 
     The Stochastic Oscillator compares a security's closing price to its price range
     over a specific period, oscillating between 0 and 100.
@@ -214,32 +164,22 @@ def calculate_stochastic(
             f"Insufficient data: need {k_period} points, got {len(close_array)}"
         )
 
-    # Initialize result arrays
-    k_percent = np.full(len(close_array), np.nan)
-    d_percent = np.full(len(close_array), np.nan)
-
-    # Calculate %K
-    for i in range(k_period - 1, len(close_array)):
-        # Get the highest high and lowest low for the period
-        period_high = np.max(high_array[i - k_period + 1 : i + 1])
-        period_low = np.min(low_array[i - k_period + 1 : i + 1])
-
-        # Calculate raw %K
-        if period_high == period_low:
-            k_percent[i] = 50.0  # Avoid division by zero
-        else:
-            k_percent[i] = (
-                (close_array[i] - period_low) / (period_high - period_low)
-            ) * 100.0
-
-    # Smooth %K if requested
-    if smooth_k > 1:
-        k_percent = calculate_sma(k_percent, smooth_k)
-
-    # Calculate %D (moving average of %K)
-    d_percent = calculate_sma(k_percent, d_period)
-
-    return k_percent, d_percent
+    try:
+        # Use TA-Lib for Stochastic calculation
+        k_percent, d_percent = talib.STOCH(
+            high_array,
+            low_array,
+            close_array,
+            fastk_period=k_period,
+            slowk_period=smooth_k,
+            slowk_matype=0,  # Simple moving average
+            slowd_period=d_period,
+            slowd_matype=0,  # Simple moving average
+        )
+        return k_percent, d_percent
+    except Exception as e:
+        logger.error(f"TA-Lib Stochastic calculation failed: {e}")
+        raise
 
 
 def calculate_williams_r(
@@ -249,7 +189,7 @@ def calculate_williams_r(
     period: int = 14,
 ) -> np.ndarray:
     """
-    Calculate Williams %R.
+    Calculate Williams %R using TA-Lib.
 
     Williams %R is a momentum indicator that measures overbought and oversold levels,
     oscillating between -100 and 0. Values above -20 indicate overbought conditions,
@@ -286,24 +226,13 @@ def calculate_williams_r(
             f"Insufficient data: need {period} points, got {len(close_array)}"
         )
 
-    # Initialize result array
-    williams_r = np.full(len(close_array), np.nan)
-
-    # Calculate Williams %R
-    for i in range(period - 1, len(close_array)):
-        # Get the highest high and lowest low for the period
-        period_high = np.max(high_array[i - period + 1 : i + 1])
-        period_low = np.min(low_array[i - period + 1 : i + 1])
-
-        # Calculate Williams %R
-        if period_high == period_low:
-            williams_r[i] = -50.0  # Avoid division by zero
-        else:
-            williams_r[i] = (
-                (period_high - close_array[i]) / (period_high - period_low)
-            ) * -100.0
-
-    return williams_r
+    try:
+        # Use TA-Lib for Williams %R calculation
+        williams_r = talib.WILLR(high_array, low_array, close_array, timeperiod=period)
+        return williams_r
+    except Exception as e:
+        logger.error(f"TA-Lib Williams %R calculation failed: {e}")
+        raise
 
 
 def calculate_cci(
@@ -313,7 +242,7 @@ def calculate_cci(
     period: int = 20,
 ) -> np.ndarray:
     """
-    Calculate Commodity Channel Index (CCI).
+    Calculate Commodity Channel Index (CCI) using TA-Lib.
 
     CCI measures the variation of a security's price from its statistical mean.
     Values above +100 may indicate overbought conditions, below -100 may indicate oversold.
@@ -349,32 +278,18 @@ def calculate_cci(
             f"Insufficient data: need {period} points, got {len(close_array)}"
         )
 
-    # Calculate Typical Price (TP)
-    typical_price = (high_array + low_array + close_array) / 3.0
-
-    # Initialize result array
-    cci = np.full(len(close_array), np.nan)
-
-    # Calculate CCI
-    for i in range(period - 1, len(close_array)):
-        # Calculate Simple Moving Average of Typical Price
-        sma_tp = np.mean(typical_price[i - period + 1 : i + 1])
-
-        # Calculate Mean Deviation
-        mean_deviation = np.mean(np.abs(typical_price[i - period + 1 : i + 1] - sma_tp))
-
-        # Calculate CCI
-        if mean_deviation == 0:
-            cci[i] = 0.0
-        else:
-            cci[i] = (typical_price[i] - sma_tp) / (0.015 * mean_deviation)
-
-    return cci
+    try:
+        # Use TA-Lib for CCI calculation
+        cci = talib.CCI(high_array, low_array, close_array, timeperiod=period)
+        return cci
+    except Exception as e:
+        logger.error(f"TA-Lib CCI calculation failed: {e}")
+        raise
 
 
 def calculate_momentum(data: Union[np.ndarray, list], period: int = 10) -> np.ndarray:
     """
-    Calculate Price Momentum.
+    Calculate Price Momentum using TA-Lib.
 
     Momentum compares the current price to the price n periods ago.
 
@@ -402,19 +317,18 @@ def calculate_momentum(data: Union[np.ndarray, list], period: int = 10) -> np.nd
             f"Insufficient data: need {period + 1} points, got {len(data_array)}"
         )
 
-    # Initialize result array
-    momentum = np.full(len(data_array), np.nan)
-
-    # Calculate momentum
-    for i in range(period, len(data_array)):
-        momentum[i] = data_array[i] - data_array[i - period]
-
-    return momentum
+    try:
+        # Use TA-Lib for Momentum calculation
+        momentum = talib.MOM(data_array, timeperiod=period)
+        return momentum
+    except Exception as e:
+        logger.error(f"TA-Lib Momentum calculation failed: {e}")
+        raise
 
 
 def calculate_roc(data: Union[np.ndarray, list], period: int = 10) -> np.ndarray:
     """
-    Calculate Rate of Change (ROC).
+    Calculate Rate of Change (ROC) using TA-Lib.
 
     ROC measures the percentage change between the current price and the price n periods ago.
 
@@ -442,16 +356,66 @@ def calculate_roc(data: Union[np.ndarray, list], period: int = 10) -> np.ndarray
             f"Insufficient data: need {period + 1} points, got {len(data_array)}"
         )
 
-    # Initialize result array
-    roc = np.full(len(data_array), np.nan)
+    try:
+        # Use TA-Lib for ROC calculation
+        roc = talib.ROC(data_array, timeperiod=period)
+        return roc
+    except Exception as e:
+        logger.error(f"TA-Lib ROC calculation failed: {e}")
+        raise
 
-    # Calculate ROC
-    for i in range(period, len(data_array)):
-        if data_array[i - period] != 0:
-            roc[i] = (
-                (data_array[i] - data_array[i - period]) / data_array[i - period]
-            ) * 100.0
-        else:
-            roc[i] = np.nan
 
-    return roc
+# Additional TA-Lib functions that weren't in the original implementation
+def calculate_bb(
+    data: Union[np.ndarray, list], period: int = 20, std_dev: float = 2.0
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Calculate Bollinger Bands using TA-Lib.
+
+    Args:
+        data: Price data (numpy array or list)
+        period: Period for moving average (default 20)
+        std_dev: Standard deviation multiplier (default 2.0)
+
+    Returns:
+        tuple: (upper_band, middle_band, lower_band)
+    """
+    try:
+        data_array = np.asarray(data, dtype=float)
+        upper, middle, lower = talib.BBANDS(
+            data_array, timeperiod=period, nbdevup=std_dev, nbdevdn=std_dev
+        )
+        return upper, middle, lower
+    except Exception as e:
+        logger.error(f"TA-Lib Bollinger Bands calculation failed: {e}")
+        raise
+
+
+def calculate_atr(
+    high: Union[np.ndarray, list],
+    low: Union[np.ndarray, list],
+    close: Union[np.ndarray, list],
+    period: int = 14,
+) -> np.ndarray:
+    """
+    Calculate Average True Range (ATR) using TA-Lib.
+
+    Args:
+        high: High prices
+        low: Low prices
+        close: Close prices
+        period: Period for ATR calculation (default 14)
+
+    Returns:
+        np.ndarray: ATR values
+    """
+    try:
+        high_array = np.asarray(high, dtype=float)
+        low_array = np.asarray(low, dtype=float)
+        close_array = np.asarray(close, dtype=float)
+
+        atr = talib.ATR(high_array, low_array, close_array, timeperiod=period)
+        return atr
+    except Exception as e:
+        logger.error(f"TA-Lib ATR calculation failed: {e}")
+        raise

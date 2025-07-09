@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
+
 # Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.levels import calculate_support_resistance
 
@@ -695,10 +696,7 @@ class SupportResistanceBreakout(TradingStrategy):
         ):
             return False
 
-        if (
-            metadata["level_type"] == "support"
-            and signal.get("signal_type") != "SELL"
-        ):
+        if metadata["level_type"] == "support" and signal.get("signal_type") != "SELL":
             return False
 
         # Validate touch count
