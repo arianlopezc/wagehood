@@ -10,20 +10,21 @@ import logging
 from typing import Union, Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from functools import lru_cache
-from ..core.constants import (
-    RSI_PERIOD,
-    RSI_OVERBOUGHT,
-    RSI_OVERSOLD,
-    MACD_FAST,
-    MACD_SLOW,
-    MACD_SIGNAL,
-    BB_PERIOD,
-    BB_STD_DEV,
-    MA_FAST,
-    MA_SLOW,
-    CACHE_TTL_SECONDS,
-)
-from ..storage.cache import cache_manager, cached
+# Constants - previously imported from ..core.constants
+RSI_PERIOD = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
+BB_PERIOD = 20
+BB_STD_DEV = 2.0
+MA_FAST = 12
+MA_SLOW = 26
+CACHE_TTL_SECONDS = 3600
+
+# Cache functionality - previously imported from ..storage.cache
+# cache_manager and cached decorator are not available
 
 logger = logging.getLogger(__name__)
 from .moving_averages import (
@@ -112,7 +113,8 @@ class IndicatorCalculator:
             data_hash = hash(str(data.tolist() if hasattr(data, "tolist") else data))
 
         # Create cache key using hash
-        return cache_manager.cache_key_hash(func_name, data_hash, **kwargs)
+        # cache_manager not available, return simple key
+        return f"{func_name}_{data_hash}_{hash(str(kwargs))}"
 
     def _get_from_cache(self, cache_key: str) -> Any:
         """
@@ -127,11 +129,8 @@ class IndicatorCalculator:
         if not self.enable_cache:
             return None
 
-        try:
-            return cache_manager.get("indicators", cache_key)
-        except Exception as e:
-            logger.warning(f"Failed to get from cache: {e}")
-            return None
+        # cache_manager not available, return None
+        return None
 
     def _set_cache(self, cache_key: str, value: Any, ttl: Optional[int] = None) -> None:
         """
@@ -145,20 +144,16 @@ class IndicatorCalculator:
         if not self.enable_cache:
             return
 
-        try:
-            cache_manager.set("indicators", cache_key, value, ttl or self.cache_ttl)
-        except Exception as e:
-            logger.warning(f"Failed to set cache: {e}")
+        # cache_manager not available, do nothing
+        pass
 
     def clear_cache(self) -> None:
         """Clear all cached results."""
         if not self.enable_cache:
             return
 
-        try:
-            cache_manager.clear_namespace("indicators")
-        except Exception as e:
-            logger.warning(f"Failed to clear cache: {e}")
+        # cache_manager not available, do nothing
+        pass
 
     def calculate_sma(
         self, data: Union[np.ndarray, list], period: int = MA_FAST
@@ -555,17 +550,11 @@ class IndicatorCalculator:
         if not self.enable_cache:
             return {"caching_enabled": False}
 
-        try:
-            stats = cache_manager.get_stats()
-            stats["caching_enabled"] = True
-            stats["cache_ttl_settings"] = self._cache_ttl_settings
-            return stats
-        except Exception as e:
-            logger.warning(f"Failed to get cache stats: {e}")
-            return {"caching_enabled": True, "error": str(e)}
+        # cache_manager not available, return basic stats
+        return {"caching_enabled": True, "error": "cache_manager not available"}
 
     # Cached versions of some methods using the decorator
-    @cached("indicators", ttl=3600)  # 1 hour cache for optimization results
+    # @cached decorator not available
     def _cached_optimize_parameters(
         self,
         data_hash: str,

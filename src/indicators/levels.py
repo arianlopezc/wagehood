@@ -8,7 +8,8 @@ pivot points, and Fibonacci retracements in price data.
 import numpy as np
 from typing import Union, List, Tuple, Optional, Dict
 from scipy.signal import argrelextrema
-from ..core.constants import MIN_DATA_POINTS
+# Constants - previously imported from ..core.constants
+MIN_DATA_POINTS = 50
 
 
 def calculate_support_resistance(

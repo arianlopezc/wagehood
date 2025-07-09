@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
-from ..core.models import Signal, SignalType, MarketData
+# Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.volatility import calculate_bollinger_bands
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,8 @@ class BollingerBandBreakout(TradingStrategy):
         super().__init__("BollingerBandBreakout", default_params)
 
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate Bollinger Band breakout signals
 
@@ -348,7 +348,7 @@ class BollingerBandBreakout(TradingStrategy):
         volume_data: np.ndarray,
         avg_volume: float,
         index: int,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Check for Bollinger Band squeeze breakout"""
 
         # Calculate band width (volatility)
@@ -409,7 +409,7 @@ class BollingerBandBreakout(TradingStrategy):
 
     def _create_bullish_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         current_price: float,
         upper_band: float,
@@ -417,7 +417,7 @@ class BollingerBandBreakout(TradingStrategy):
         lower_band: float,
         volume_data: np.ndarray,
         avg_volume: float,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create bullish breakout signal"""
 
         # Calculate confidence factors
@@ -465,14 +465,14 @@ class BollingerBandBreakout(TradingStrategy):
         arrays = data.to_arrays()
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.BUY,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "BUY",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Bollinger Band Bullish Breakout",
                 upper_band=upper_band,
                 middle_band=middle_band,
@@ -482,13 +482,13 @@ class BollingerBandBreakout(TradingStrategy):
                 volume_factor=volume_factor,
                 momentum_factor=momentum_factor,
             ),
-        )
+        }
 
         return signal
 
     def _create_bearish_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         current_price: float,
         upper_band: float,
@@ -496,7 +496,7 @@ class BollingerBandBreakout(TradingStrategy):
         lower_band: float,
         volume_data: np.ndarray,
         avg_volume: float,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create bearish breakout signal"""
 
         # Calculate confidence factors
@@ -544,14 +544,14 @@ class BollingerBandBreakout(TradingStrategy):
         arrays = data.to_arrays()
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.SELL,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "SELL",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Bollinger Band Bearish Breakout",
                 upper_band=upper_band,
                 middle_band=middle_band,
@@ -561,7 +561,7 @@ class BollingerBandBreakout(TradingStrategy):
                 volume_factor=volume_factor,
                 momentum_factor=momentum_factor,
             ),
-        )
+        }
 
         return signal
 
@@ -574,7 +574,7 @@ class BollingerBandBreakout(TradingStrategy):
         middle_band: float,
         lower_band: float,
         band_width: float,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create squeeze breakout signal"""
 
         # Squeeze signals have moderate confidence
@@ -584,17 +584,17 @@ class BollingerBandBreakout(TradingStrategy):
             return None
 
         current_price = data["arrays"]["close"][index]
-        signal_type = SignalType.BUY if direction == "bullish" else SignalType.SELL
+        signal_type = "BUY" if direction == "bullish" else "SELL"
 
         # Create signal (note: this is a simplified implementation)
-        signal = Signal(
-            timestamp=datetime.now(),  # Placeholder
-            symbol="UNKNOWN",  # Placeholder
-            signal_type=signal_type,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": datetime.now(),  # Placeholder
+            "symbol": "UNKNOWN",  # Placeholder
+            "signal_type": signal_type,
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name=f"Bollinger Band {direction.title()} Squeeze",
                 upper_band=upper_band,
                 middle_band=middle_band,
@@ -602,12 +602,12 @@ class BollingerBandBreakout(TradingStrategy):
                 band_width=band_width,
                 squeeze_type=direction,
             ),
-        )
+        }
 
         return signal
 
     def _calculate_momentum_factor(
-        self, data: MarketData, index: int, direction: str
+        self, data: Dict[str, Any], index: int, direction: str
     ) -> float:
         """Calculate momentum factor based on recent price action"""
 
@@ -714,19 +714,19 @@ class BollingerBandBreakout(TradingStrategy):
             "squeeze_threshold": [0.05, 0.1, 0.15, 0.2],
         }
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Strategy-specific signal validation"""
 
         # Check if signal type is appropriate
-        if signal.signal_type not in [SignalType.BUY, SignalType.SELL]:
+        if signal.get("signal_type") not in ["BUY", "SELL"]:
             return False
 
         # Check confidence threshold
-        if signal.confidence < self.parameters["min_confidence"]:
+        if signal.get("confidence", 0) < self.parameters["min_confidence"]:
             return False
 
         # Check metadata for required fields
-        metadata = signal.metadata
+        metadata = signal.get("metadata", {})
         if "signal_name" not in metadata:
             return False
 

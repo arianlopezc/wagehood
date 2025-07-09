@@ -19,7 +19,7 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-from ..core.models import Signal, SignalType, MarketData, OHLCV
+# Note: These types are simplified to basic Python types since core.models doesn't exist
 from ..indicators import IndicatorCalculator
 
 logger = logging.getLogger(__name__)
@@ -46,17 +46,17 @@ class TradingStrategy(ABC):
 
     @abstractmethod
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate market signals based on market data and indicators
 
         Args:
-            data: Market data including OHLCV
+            data: Market data dictionary including OHLCV
             indicators: Pre-calculated indicators
 
         Returns:
-            List of high-quality market signals
+            List of high-quality market signal dictionaries
         """
         pass
 
@@ -80,15 +80,15 @@ class TradingStrategy(ABC):
         """
         pass
 
-    def validate_signals(self, signals: List[Signal]) -> List[Signal]:
+    def validate_signals(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Validate and filter signals based on quality criteria
 
         Args:
-            signals: List of raw signals
+            signals: List of raw signal dictionaries
 
         Returns:
-            List of validated, high-quality signals
+            List of validated, high-quality signal dictionaries
         """
         # Use list comprehension for better performance
         validated_signals = [
@@ -101,29 +101,29 @@ class TradingStrategy(ABC):
         # Additional quality validation
         return self._enhance_signal_quality(validated_signals)
 
-    def _validate_signal_basic(self, signal: Signal) -> bool:
+    def _validate_signal_basic(self, signal: Dict[str, Any]) -> bool:
         """Basic signal validation with enhanced quality checks"""
         # Enhanced validation for signal quality
         return (
-            signal.confidence >= 0.3  # Higher minimum confidence
-            and signal.price > 0
-            and signal.timestamp is not None
-            and signal.signal_type in [SignalType.BUY, SignalType.SELL]
-            and signal.metadata is not None
+            signal.get('confidence', 0) >= 0.3  # Higher minimum confidence
+            and signal.get('price', 0) > 0
+            and signal.get('timestamp') is not None
+            and signal.get('signal_type') in ['BUY', 'SELL']
+            and signal.get('metadata') is not None
         )
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Strategy-specific signal validation - override in subclasses"""
         return True
 
     def optimize_parameters(
-        self, data: MarketData, metric: str = "signal_quality"
+        self, data: Dict[str, Any], metric: str = "signal_quality"
     ) -> Dict[str, Any]:
         """
         Optimize strategy parameters for signal quality
 
         Args:
-            data: Historical market data
+            data: Historical market data dictionary
             metric: Optimization metric ('signal_quality', 'signal_count', 'confidence_avg')
 
         Returns:
@@ -189,7 +189,7 @@ class TradingStrategy(ABC):
             dict(zip(keys, combination)) for combination in itertools.product(*values)
         ]
 
-    def _calculate_signal_quality_score(self, data: MarketData, metric: str) -> float:
+    def _calculate_signal_quality_score(self, data: Dict[str, Any], metric: str) -> float:
         """Calculate signal quality score for optimization"""
         try:
             # Generate signals for the data
@@ -205,7 +205,7 @@ class TradingStrategy(ABC):
             elif metric == "signal_count":
                 return len(signals)
             elif metric == "confidence_avg":
-                return sum(s.confidence for s in signals) / len(signals)
+                return sum(s.get('confidence', 0) for s in signals) / len(signals)
             else:
                 return float("-inf")
 
@@ -213,12 +213,12 @@ class TradingStrategy(ABC):
             logger.error(f"Error calculating signal quality score: {e}")
             return float("-inf")
 
-    def _calculate_indicators(self, data: MarketData) -> Dict[str, Any]:
+    def _calculate_indicators(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate all required indicators for the strategy"""
         # Check cache first
         if (
             self._cache_timestamp
-            and data.last_updated == self._cache_timestamp
+            and data.get('last_updated') == self._cache_timestamp
             and self._indicator_cache
         ):
             return self._indicator_cache
@@ -227,8 +227,8 @@ class TradingStrategy(ABC):
         required_indicators = self.get_required_indicators()
 
         # Convert data to arrays once
-        arrays = data.to_arrays()
-        close_prices = arrays["close"]
+        arrays = data.get('data', [])
+        close_prices = [item.get('close', 0) for item in arrays] if arrays else []
 
         # Define indicator mapping for cleaner code
         indicator_calculators = {
@@ -250,7 +250,7 @@ class TradingStrategy(ABC):
 
         # Update cache
         self._indicator_cache = indicators
-        self._cache_timestamp = data.last_updated
+        self._cache_timestamp = data.get('last_updated')
 
         return indicators
 
@@ -578,14 +578,14 @@ class TradingStrategy(ABC):
 
         return present_fields / len(meaningful_fields)
 
-    def _assess_signal_validation(self, signal: Signal) -> float:
+    def _assess_signal_validation(self, signal: Dict[str, Any]) -> float:
         """Assess signal validation quality"""
         # Check if signal meets validation criteria
-        if signal.confidence < 0.5:
+        if signal.get('confidence', 0) < 0.5:
             return 0.0
 
         # Higher confidence signals get better validation scores
-        return min(1.0, signal.confidence * 1.2)
+        return min(1.0, signal.get('confidence', 0) * 1.2)
 
     def _enhance_confidence_quality(
         self, base_confidence: float, conditions: Dict[str, float]

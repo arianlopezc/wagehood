@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
-from ..core.models import Signal, SignalType, MarketData
+# Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.momentum import calculate_macd, calculate_rsi
 
 logger = logging.getLogger(__name__)
@@ -69,8 +69,8 @@ class MACDRSIStrategy(TradingStrategy):
         super().__init__("MACDRSIStrategy", default_params)
 
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate high-quality MACD+RSI combination signals
 
@@ -287,7 +287,7 @@ class MACDRSIStrategy(TradingStrategy):
 
     def _create_bullish_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         macd_value: float,
         signal_value: float,
@@ -295,7 +295,7 @@ class MACDRSIStrategy(TradingStrategy):
         histogram: float,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create bullish signal"""
 
         # Calculate enhanced confidence factors for signal quality
@@ -371,14 +371,14 @@ class MACDRSIStrategy(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create enhanced signal with quality indicators
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.BUY,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "BUY",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="MACD+RSI Bullish",
                 macd_value=macd_value,
                 signal_value=signal_value,
@@ -391,13 +391,13 @@ class MACDRSIStrategy(TradingStrategy):
                 timing_quality=timing_factor,
                 signal_quality_score=confidence,
             ),
-        )
+        }
 
         return signal
 
     def _create_bearish_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         macd_value: float,
         signal_value: float,
@@ -405,7 +405,7 @@ class MACDRSIStrategy(TradingStrategy):
         histogram: float,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create enhanced bearish signal with quality validation"""
 
         # Calculate enhanced confidence factors for signal quality
@@ -480,14 +480,14 @@ class MACDRSIStrategy(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create enhanced signal with quality indicators
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.SELL,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "SELL",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="MACD+RSI Bearish",
                 macd_value=macd_value,
                 signal_value=signal_value,
@@ -500,12 +500,12 @@ class MACDRSIStrategy(TradingStrategy):
                 timing_quality=timing_factor,
                 signal_quality_score=confidence,
             ),
-        )
+        }
 
         return signal
 
     def _calculate_momentum_factor(
-        self, data: MarketData, index: int, direction: str
+        self, data: Dict[str, Any], index: int, direction: str
     ) -> float:
         """Calculate momentum factor based on recent price action"""
 
@@ -533,7 +533,7 @@ class MACDRSIStrategy(TradingStrategy):
         return momentum
 
     def _calculate_trend_confirmation(
-        self, data: MarketData, index: int, direction: str
+        self, data: Dict[str, Any], index: int, direction: str
     ) -> float:
         """Calculate trend confirmation factor based on multiple timeframe analysis"""
 
@@ -572,7 +572,7 @@ class MACDRSIStrategy(TradingStrategy):
 
         return trend_strength
 
-    def _calculate_signal_timing_quality(self, data: MarketData, index: int) -> float:
+    def _calculate_signal_timing_quality(self, data: Dict[str, Any], index: int) -> float:
         """Calculate signal timing quality based on market conditions"""
 
         arrays = data.to_arrays()
@@ -604,12 +604,12 @@ class MACDRSIStrategy(TradingStrategy):
 
     def _detect_divergence_signals(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         macd_line: np.ndarray,
         rsi_values: np.ndarray,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> List[Signal]:
+    ) -> List[Dict[str, Any]]:
         """Detect price-indicator divergence signals"""
 
         signals = []
@@ -724,12 +724,12 @@ class MACDRSIStrategy(TradingStrategy):
 
     def _create_divergence_signal(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         direction: str,
         volume_data: np.ndarray = None,
         avg_volume: float = None,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Create divergence signal"""
 
         # Divergence signals have moderate confidence
@@ -759,22 +759,22 @@ class MACDRSIStrategy(TradingStrategy):
         arrays = data.to_arrays()
         current_price = arrays["close"][index]
 
-        signal_type = SignalType.BUY if direction == "bullish" else SignalType.SELL
+        signal_type = "BUY" if direction == "bullish" else "SELL"
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=signal_type,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": signal_type,
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name=f"MACD+RSI {direction.title()} Divergence",
                 divergence_type=direction,
                 volume_confirmation=volume_confidence,
             ),
-        )
+        }
 
         return signal
 
@@ -882,19 +882,19 @@ class MACDRSIStrategy(TradingStrategy):
             "volume_threshold": [1.2, 1.3, 1.5, 2.0],  # Stricter volume requirements
         }
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Enhanced strategy-specific signal validation for quality assurance"""
 
         # Check if signal type is appropriate
-        if signal.signal_type not in [SignalType.BUY, SignalType.SELL]:
+        if signal.get("signal_type") not in ["BUY", "SELL"]:
             return False
 
         # Check enhanced confidence threshold
-        if signal.confidence < self.parameters["min_confidence"]:
+        if signal.get("confidence", 0) < self.parameters["min_confidence"]:
             return False
 
         # Check metadata for required fields
-        metadata = signal.metadata
+        metadata = signal.get("metadata", {})
         if "signal_name" not in metadata:
             return False
 

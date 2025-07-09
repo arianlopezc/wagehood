@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from src.core.models import OHLCV, TimeFrame, MarketData
 
 
 class DataProvider(ABC):
@@ -59,9 +58,9 @@ class DataProvider(ABC):
         pass
     
     @abstractmethod
-    async def get_historical_data(self, symbol: str, timeframe: TimeFrame,
+    async def get_historical_data(self, symbol: str, timeframe: str,
                                  start_date: datetime, end_date: datetime,
-                                 limit: Optional[int] = None) -> List[OHLCV]:
+                                 limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Retrieve historical OHLCV data for a symbol.
         
@@ -73,7 +72,7 @@ class DataProvider(ABC):
             limit: Maximum number of records to return
             
         Returns:
-            List of OHLCV data points
+            List of OHLCV data dictionaries
             
         Raises:
             ConnectionError: If not connected to data source
@@ -83,8 +82,8 @@ class DataProvider(ABC):
         pass
     
     @abstractmethod
-    async def get_latest_data(self, symbol: str, timeframe: TimeFrame,
-                            periods: int = 1) -> List[OHLCV]:
+    async def get_latest_data(self, symbol: str, timeframe: str,
+                            periods: int = 1) -> List[Dict[str, Any]]:
         """
         Get the latest N periods of data for a symbol.
         
@@ -94,7 +93,7 @@ class DataProvider(ABC):
             periods: Number of latest periods to retrieve
             
         Returns:
-            List of latest OHLCV data points
+            List of latest OHLCV data dictionaries
             
         Raises:
             ConnectionError: If not connected to data source
@@ -118,9 +117,9 @@ class DataProvider(ABC):
         pass
     
     @abstractmethod
-    async def get_market_data(self, symbol: str, timeframe: TimeFrame,
+    async def get_market_data(self, symbol: str, timeframe: str,
                             start_date: Optional[datetime] = None,
-                            end_date: Optional[datetime] = None) -> MarketData:
+                            end_date: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Get complete market data object for a symbol.
         
@@ -131,7 +130,7 @@ class DataProvider(ABC):
             end_date: End date for data (optional)
             
         Returns:
-            MarketData object with OHLCV data and metadata
+            Dictionary with OHLCV data and metadata
             
         Raises:
             ConnectionError: If not connected to data source
@@ -186,12 +185,12 @@ class DataProvider(ABC):
         }
     
     @abstractmethod
-    def get_supported_timeframes(self) -> List[TimeFrame]:
+    def get_supported_timeframes(self) -> List[str]:
         """
         Get list of supported timeframes.
         
         Returns:
-            List of supported TimeFrame values
+            List of supported timeframe strings
         """
         pass
     
@@ -221,12 +220,12 @@ class DataProvider(ABC):
         except Exception:
             return False
     
-    def validate_timeframe(self, timeframe: TimeFrame) -> bool:
+    def validate_timeframe(self, timeframe: str) -> bool:
         """
         Validate if a timeframe is supported by this provider.
         
         Args:
-            timeframe: TimeFrame to validate
+            timeframe: Timeframe string to validate
             
         Returns:
             True if timeframe is supported, False otherwise

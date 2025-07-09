@@ -7,14 +7,13 @@ Stochastic Oscillator, Williams %R, and Commodity Channel Index (CCI).
 
 import numpy as np
 from typing import Union, Tuple, Optional
-from ..core.constants import (
-    RSI_PERIOD,
-    RSI_OVERBOUGHT,
-    RSI_OVERSOLD,
-    MACD_FAST,
-    MACD_SLOW,
-    MACD_SIGNAL,
-)
+# Constants - previously imported from ..core.constants
+RSI_PERIOD = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+MACD_FAST = 12
+MACD_SLOW = 26
+MACD_SIGNAL = 9
 from .moving_averages import calculate_ema, calculate_sma
 
 

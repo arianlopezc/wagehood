@@ -21,6 +21,9 @@ This file contains project-specific instructions and standards for Claude Code t
   - API documentation → `docs/api-reference.md`
 - **Migration**: When documentation graduates from private to public, move from `.local/` to `docs/` and update all links
 
+## Testing Policy
+**Note**: This project will only declare integration tests to make sure that all functionality actually works with real data. Data mock is absolutely forbidden.
+
 ## All Project Commands
 
 ### Testing Commands

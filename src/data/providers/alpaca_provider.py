@@ -1,58 +1,57 @@
 """
 Alpaca Markets Data Provider
 
-This module implements the Alpaca Markets data provider for real-time and historical
-market data using the official alpaca-py SDK. Supports both IEX (free) and SIP (paid)
-data feeds with WebSocket streaming capabilities.
+This module implements the Alpaca Markets data provider using the official alpaca-py SDK.
+Supports historical data retrieval and real-time streaming for stock market data.
 """
 
-import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Callable
 import os
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional, Callable
+from threading import Thread
 
 try:
-    from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
-    from alpaca.data.live import StockDataStream, CryptoDataStream
-    from alpaca.data.requests import (
-        StockBarsRequest,
-        CryptoBarsRequest
-    )
-    from alpaca.data.timeframe import TimeFrame as AlpacaTimeFrame, TimeFrameUnit
-    from alpaca.data.enums import DataFeed, CryptoFeed
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.live import StockDataStream
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame
     from alpaca.common.exceptions import APIError
     ALPACA_AVAILABLE = True
 except ImportError:
     ALPACA_AVAILABLE = False
     # Define dummy classes to avoid NameError
-    class AlpacaTimeFrame:
+    class StockHistoricalDataClient:
         pass
-    class TimeFrameUnit:
+    class StockDataStream:
         pass
+    class StockBarsRequest:
+        pass
+    class TimeFrame:
+        Hour = None
+        Day = None
     class APIError(Exception):
         pass
 
-from src.data.providers.base import DataProvider, ConnectionError, DataRetrievalError
-from src.core.models import OHLCV, TimeFrame, MarketData
+from .base import DataProvider, ConnectionError, DataRetrievalError
 
 logger = logging.getLogger(__name__)
 
 
 class AlpacaProvider(DataProvider):
     """
-    Alpaca Markets data provider implementation.
+    Alpaca Markets data provider implementation using official alpaca-py SDK.
     
-    Provides access to real-time and historical market data from Alpaca Markets
-    using their official Python SDK. Supports both free IEX data and paid SIP data.
-    
-    Features:
-    - Historical data retrieval (stocks and crypto)
-    - Real-time WebSocket streaming
-    - Paper trading and live trading support
-    - Automatic rate limiting and error handling
-    - Circuit breaker pattern for resilience
+    Provides access to:
+    - Historical OHLCV data with 1-hour and 1-day timeframes
+    - Real-time price streaming
     """
+    
+    # Supported timeframes mapping
+    TIMEFRAME_MAPPING = {
+        '1h': TimeFrame.Hour,
+        '1d': TimeFrame.Day
+    }
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
@@ -63,39 +62,16 @@ class AlpacaProvider(DataProvider):
                 - api_key: Alpaca API key (or use ALPACA_API_KEY env var)
                 - secret_key: Alpaca secret key (or use ALPACA_SECRET_KEY env var)
                 - paper: Use paper trading environment (default: True)
-                - feed: Data feed type ('iex' or 'sip', default: 'iex')
-                - crypto_feed: Crypto data feed ('us' default)
-                - max_retries: Maximum retry attempts (default: 3)
-                - retry_delay: Delay between retries in seconds (default: 1.0)
         """
         if not ALPACA_AVAILABLE:
             raise ImportError("alpaca-py is required for AlpacaProvider. Install with: pip install alpaca-py")
         
         super().__init__("Alpaca", config)
         
-        # Configuration
+        # Get credentials from config or environment
         self.api_key = self.config.get('api_key') or os.getenv('ALPACA_API_KEY')
         self.secret_key = self.config.get('secret_key') or os.getenv('ALPACA_SECRET_KEY')
         self.paper = self.config.get('paper', True)
-        
-        # Convert string feed to enum
-        feed_str = self.config.get('feed', 'iex')
-        if feed_str == 'iex':
-            self.feed = DataFeed.IEX
-        elif feed_str == 'sip':
-            self.feed = DataFeed.SIP
-        else:
-            self.feed = DataFeed.IEX  # Default to IEX
-            
-        # Convert string crypto feed to enum
-        crypto_feed_str = self.config.get('crypto_feed', 'us')
-        if crypto_feed_str == 'us':
-            self.crypto_feed = CryptoFeed.US
-        else:
-            self.crypto_feed = CryptoFeed.US  # Default to US
-            
-        self.max_retries = self.config.get('max_retries', 3)
-        self.retry_delay = self.config.get('retry_delay', 1.0)
         
         # Validate credentials
         if not self.api_key or not self.secret_key:
@@ -105,16 +81,15 @@ class AlpacaProvider(DataProvider):
             )
         
         # Initialize clients
-        self.stock_client = None
-        self.crypto_client = None
-        self.stock_stream = None
-        self.crypto_stream = None
+        self.historical_client = None
+        self.stream_client = None
         
-        # Connection state
+        # Streaming state
+        self._stream_active = False
+        self._stream_thread = None
         self._stream_handlers = {}
-        self._stream_connected = False
         
-        logger.info(f"Initialized AlpacaProvider (paper={self.paper}, feed={self.feed})")
+        logger.info(f"Initialized AlpacaProvider (paper={self.paper})")
     
     async def connect(self) -> bool:
         """
@@ -126,33 +101,18 @@ class AlpacaProvider(DataProvider):
         try:
             self._clear_error()
             
-            # Initialize historical data clients
-            # Note: Historical clients don't require authentication for crypto
-            if self.api_key and self.secret_key:
-                self.stock_client = StockHistoricalDataClient(
-                    api_key=self.api_key,
-                    secret_key=self.secret_key
-                )
-            else:
-                self.stock_client = StockHistoricalDataClient()
+            # Initialize clients
+            self.historical_client = StockHistoricalDataClient(
+                api_key=self.api_key,
+                secret_key=self.secret_key
+            )
             
-            self.crypto_client = CryptoHistoricalDataClient()
+            self.stream_client = StockDataStream(
+                api_key=self.api_key,
+                secret_key=self.secret_key
+            )
             
-            # Initialize streaming clients (require authentication)
-            if self.api_key and self.secret_key:
-                self.stock_stream = StockDataStream(
-                    api_key=self.api_key,
-                    secret_key=self.secret_key,
-                    feed=self.feed
-                )
-                
-                self.crypto_stream = CryptoDataStream(
-                    api_key=self.api_key,
-                    secret_key=self.secret_key,
-                    feed=self.crypto_feed
-                )
-            
-            # Test connection with a simple request
+            # Test connection
             await self._test_connection()
             
             self._connected = True
@@ -168,23 +128,10 @@ class AlpacaProvider(DataProvider):
     async def disconnect(self) -> None:
         """Close connection to Alpaca data sources."""
         try:
-            # Stop streaming clients
-            if self.stock_stream and self._stream_connected:
-                try:
-                    await self.stock_stream.stop_ws()
-                except Exception as e:
-                    logger.warning(f"Error stopping stock stream: {e}")
+            if self._stream_active:
+                await self.stop_streaming()
             
-            if self.crypto_stream and self._stream_connected:
-                try:
-                    await self.crypto_stream.stop_ws()
-                except Exception as e:
-                    logger.warning(f"Error stopping crypto stream: {e}")
-            
-            self._stream_connected = False
             self._connected = False
-            self._stream_handlers.clear()
-            
             logger.info("Disconnected from Alpaca Markets")
             
         except Exception as e:
@@ -195,155 +142,133 @@ class AlpacaProvider(DataProvider):
     async def _test_connection(self) -> None:
         """Test connection by making a simple API request."""
         try:
-            # Test with a simple crypto data request (no auth required)
-            request = CryptoBarsRequest(
-                symbol_or_symbols=["BTC/USD"],
-                timeframe=AlpacaTimeFrame(1, TimeFrameUnit.Day),
+            # Get test symbol from environment
+            symbols = self.get_supported_symbols()
+            test_symbol = symbols[0] if symbols else "SPY"
+            
+            # Test with minimal historical data request
+            request = StockBarsRequest(
+                symbol_or_symbols=[test_symbol],
+                timeframe=TimeFrame.Day,
                 start=datetime.now() - timedelta(days=2),
-                end=datetime.now() - timedelta(days=1)
+                end=datetime.now(),
+                limit=1
             )
             
-            bars = self.crypto_client.get_crypto_bars(request)
+            bars = self.historical_client.get_stock_bars(request)
+            
+            # Verify we got a response
             if hasattr(bars, 'df') and not bars.df.empty:
                 logger.debug("Connection test successful")
+            elif hasattr(bars, 'data') and bars.data:
+                logger.debug("Connection test successful")  
             else:
                 logger.warning("Connection test returned empty data")
                 
         except Exception as e:
             raise ConnectionError(f"Connection test failed: {str(e)}")
     
-    def _convert_timeframe(self, timeframe: TimeFrame) -> AlpacaTimeFrame:
-        """
-        Convert internal TimeFrame to Alpaca TimeFrame.
-        
-        Args:
-            timeframe: Internal TimeFrame enum
-            
-        Returns:
-            Alpaca TimeFrame object
-        """
-        mapping = {
-            TimeFrame.MINUTE_1: AlpacaTimeFrame(1, TimeFrameUnit.Minute),
-            TimeFrame.MINUTE_5: AlpacaTimeFrame(5, TimeFrameUnit.Minute),
-            TimeFrame.MINUTE_15: AlpacaTimeFrame(15, TimeFrameUnit.Minute),
-            TimeFrame.MINUTE_30: AlpacaTimeFrame(30, TimeFrameUnit.Minute),
-            TimeFrame.HOUR_1: AlpacaTimeFrame(1, TimeFrameUnit.Hour),
-            TimeFrame.HOUR_4: AlpacaTimeFrame(4, TimeFrameUnit.Hour),
-            TimeFrame.DAILY: AlpacaTimeFrame(1, TimeFrameUnit.Day),
-            TimeFrame.WEEKLY: AlpacaTimeFrame(1, TimeFrameUnit.Week),
-            TimeFrame.MONTHLY: AlpacaTimeFrame(1, TimeFrameUnit.Month),
+    def _get_alpaca_timeframe(self, timeframe: str):
+        """Convert timeframe string to Alpaca TimeFrame object."""
+        if timeframe not in self.TIMEFRAME_MAPPING:
+            raise ValueError(f"Unsupported timeframe: {timeframe}. Supported: {list(self.TIMEFRAME_MAPPING.keys())}")
+        return self.TIMEFRAME_MAPPING[timeframe]
+    
+    def _convert_bar_to_ohlcv(self, bar, timestamp=None) -> Dict[str, Any]:
+        """Convert a single bar to OHLCV dictionary."""
+        return {
+            'timestamp': timestamp or bar.timestamp,
+            'open': float(bar.open),
+            'high': float(bar.high),
+            'low': float(bar.low),
+            'close': float(bar.close),
+            'volume': float(bar.volume) if bar.volume is not None else 0.0
         }
-        
-        if timeframe not in mapping:
-            raise ValueError(f"Unsupported timeframe: {timeframe}")
-        
-        return mapping[timeframe]
     
-    def _alpaca_bar_to_ohlcv(self, bar, symbol: str) -> OHLCV:
-        """
-        Convert Alpaca bar data to OHLCV object.
+    def _convert_bars_to_dict(self, bars_response, symbol: str) -> List[Dict[str, Any]]:
+        """Convert Alpaca bars response to list of OHLCV dictionaries."""
+        ohlcv_data = []
         
-        Args:
-            bar: Alpaca bar data
-            symbol: Trading symbol
+        try:
+            # Handle DataFrame response format (most common)
+            if hasattr(bars_response, 'df') and not bars_response.df.empty:
+                df = bars_response.df
+                
+                # Filter for specific symbol if multi-symbol response
+                if 'symbol' in df.index.names:
+                    if symbol in df.index.get_level_values('symbol'):
+                        symbol_df = df.loc[symbol]
+                    else:
+                        logger.warning(f"Symbol {symbol} not found in response")
+                        return []
+                else:
+                    symbol_df = df
+                
+                # Convert each row to OHLCV dictionary
+                for timestamp, row in symbol_df.iterrows():
+                    # Handle multi-index timestamp
+                    if isinstance(timestamp, tuple):
+                        timestamp = timestamp[-1]
+                    
+                    ohlcv = {
+                        'timestamp': timestamp,
+                        'open': float(row['open']),
+                        'high': float(row['high']),
+                        'low': float(row['low']),
+                        'close': float(row['close']),
+                        'volume': float(row['volume']) if row['volume'] is not None else 0.0
+                    }
+                    ohlcv_data.append(ohlcv)
             
-        Returns:
-            OHLCV object
-        """
-        return OHLCV(
-            timestamp=bar.timestamp,
-            open=float(bar.open),
-            high=float(bar.high),
-            low=float(bar.low),
-            close=float(bar.close),
-            volume=float(bar.volume) if bar.volume is not None else 0.0
-        )
+            # Handle direct data access (alternative format)
+            elif hasattr(bars_response, 'data') and bars_response.data:
+                symbol_data = bars_response.data.get(symbol, [])
+                for bar in symbol_data:
+                    ohlcv_data.append(self._convert_bar_to_ohlcv(bar))
+            
+        except Exception as e:
+            logger.error(f"Error converting bars response: {e}")
+            raise DataRetrievalError(f"Failed to convert bars response: {str(e)}")
+        
+        return ohlcv_data
     
-    async def get_historical_data(self, symbol: str, timeframe: TimeFrame,
+    async def get_historical_data(self, symbol: str, timeframe: str,
                                  start_date: datetime, end_date: datetime,
-                                 limit: Optional[int] = None) -> List[OHLCV]:
+                                 limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Retrieve historical OHLCV data for a symbol.
         
         Args:
-            symbol: Trading symbol (e.g., 'AAPL', 'BTC/USD')
-            timeframe: Data timeframe
+            symbol: Trading symbol (e.g., 'AAPL', 'MSFT')
+            timeframe: Data timeframe ('1h' or '1d')
             start_date: Start date for data retrieval
             end_date: End date for data retrieval
-            limit: Maximum number of records to return
+            limit: Maximum number of records to return (default: 1000)
             
         Returns:
-            List of OHLCV data points
+            List of OHLCV data dictionaries
         """
-        if not self._connected:
+        if not self._connected or not self.historical_client:
             raise ConnectionError("Not connected to Alpaca Markets")
         
         try:
-            alpaca_timeframe = self._convert_timeframe(timeframe)
+            # Create request
+            request = StockBarsRequest(
+                symbol_or_symbols=[symbol],
+                timeframe=self._get_alpaca_timeframe(timeframe),
+                start=start_date,
+                end=end_date,
+                limit=limit or 1000
+            )
             
-            # Determine if this is a crypto symbol
-            is_crypto = '/' in symbol
+            # Get data from Alpaca
+            logger.debug(f"Requesting historical data for {symbol} ({timeframe}) from {start_date} to {end_date}")
+            bars = self.historical_client.get_stock_bars(request)
             
-            if is_crypto:
-                # Use crypto client
-                request = CryptoBarsRequest(
-                    symbol_or_symbols=[symbol],
-                    timeframe=alpaca_timeframe,
-                    start=start_date,
-                    end=end_date,
-                    limit=limit
-                )
-                
-                bars = self.crypto_client.get_crypto_bars(request)
-                
-            else:
-                # Use stock client
-                request = StockBarsRequest(
-                    symbol_or_symbols=[symbol],
-                    timeframe=alpaca_timeframe,
-                    start=start_date,
-                    end=end_date,
-                    limit=limit
-                )
-                
-                bars = self.stock_client.get_stock_bars(request)
+            # Convert to our format
+            ohlcv_data = self._convert_bars_to_dict(bars, symbol)
             
-            # Convert to OHLCV objects
-            ohlcv_data = []
-            
-            # Handle DataFrame response format
-            if hasattr(bars, 'df') and not bars.df.empty:
-                # Data is in DataFrame format
-                df = bars.df
-                
-                # Filter for the specific symbol if multiple symbols in response
-                if 'symbol' in df.index.names:
-                    symbol_df = df.loc[symbol] if symbol in df.index.get_level_values('symbol') else df
-                else:
-                    symbol_df = df
-                
-                # Convert each row to OHLCV
-                for timestamp, row in symbol_df.iterrows():
-                    # Handle multi-index timestamp
-                    if isinstance(timestamp, tuple):
-                        timestamp = timestamp[-1]  # Get the actual timestamp
-                    
-                    ohlcv = OHLCV(
-                        timestamp=timestamp,
-                        open=float(row['open']),
-                        high=float(row['high']),
-                        low=float(row['low']),
-                        close=float(row['close']),
-                        volume=float(row['volume']) if row['volume'] is not None else 0.0
-                    )
-                    ohlcv_data.append(ohlcv)
-            
-            # Legacy format handling (in case the API returns the old format)
-            elif hasattr(bars, '__getitem__') and symbol in bars:
-                for bar in bars[symbol]:
-                    ohlcv_data.append(self._alpaca_bar_to_ohlcv(bar, symbol))
-            
-            logger.debug(f"Retrieved {len(ohlcv_data)} historical bars for {symbol}")
+            logger.info(f"Retrieved {len(ohlcv_data)} historical bars for {symbol}")
             return ohlcv_data
             
         except APIError as e:
@@ -352,248 +277,122 @@ class AlpacaProvider(DataProvider):
             logger.error(error_msg)
             raise DataRetrievalError(error_msg)
         
+        except ValueError as e:
+            error_msg = f"Invalid parameters for {symbol}: {str(e)}"
+            self._set_error(error_msg)
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         except Exception as e:
             error_msg = f"Error retrieving historical data for {symbol}: {str(e)}"
             self._set_error(error_msg)
             logger.error(error_msg)
             raise DataRetrievalError(error_msg)
     
-    async def get_latest_data(self, symbol: str, timeframe: TimeFrame,
-                            periods: int = 1) -> List[OHLCV]:
+    async def get_latest_data(self, symbol: str, timeframe: str,
+                            periods: int = 1) -> List[Dict[str, Any]]:
         """
         Get the latest N periods of data for a symbol.
         
         Args:
             symbol: Trading symbol
-            timeframe: Data timeframe
+            timeframe: Data timeframe ('1h' or '1d')
             periods: Number of latest periods to retrieve
             
         Returns:
-            List of latest OHLCV data points
+            List of latest OHLCV data dictionaries
         """
-        # Calculate start date based on timeframe and periods
+        # Calculate start date with buffer to ensure we get enough data
         now = datetime.now()
         
-        # Calculate timeframe duration in minutes
-        timeframe_minutes = {
-            TimeFrame.MINUTE_1: 1,
-            TimeFrame.MINUTE_5: 5,
-            TimeFrame.MINUTE_15: 15,
-            TimeFrame.MINUTE_30: 30,
-            TimeFrame.HOUR_1: 60,
-            TimeFrame.HOUR_4: 240,
-            TimeFrame.DAILY: 1440,
-            TimeFrame.WEEKLY: 10080,
-            TimeFrame.MONTHLY: 43200,
-        }.get(timeframe, 60)
+        if timeframe == '1h':
+            buffer_hours = max(periods * 3, 72)  # At least 3 days
+            start_date = now - timedelta(hours=buffer_hours)
+        elif timeframe == '1d':
+            buffer_days = max(periods * 3, 14)  # At least 2 weeks
+            start_date = now - timedelta(days=buffer_days)
+        else:
+            raise ValueError(f"Unsupported timeframe: {timeframe}")
         
-        # Add buffer to ensure we get enough data
-        buffer_periods = max(10, periods * 2)
-        start_date = now - timedelta(minutes=timeframe_minutes * buffer_periods)
-        
+        # Get historical data and return latest periods
         data = await self.get_historical_data(symbol, timeframe, start_date, now)
-        
-        # Return the latest N periods
         return data[-periods:] if len(data) >= periods else data
     
-    async def get_symbols(self) -> List[str]:
+    async def start_streaming(self, symbol: str, on_bar: Optional[Callable] = None) -> None:
         """
-        Get list of available symbols from Alpaca.
-        
-        Returns:
-            List of available trading symbols
-        """
-        # Note: Alpaca doesn't provide a simple "list all symbols" endpoint
-        # In practice, you would maintain a list of symbols you're interested in
-        # For now, return a default list of popular symbols
-        return [
-            # Popular stocks
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
-            'SPY', 'QQQ', 'IWM', 'VTI', 'VOO',
-            
-            # Popular crypto
-            'BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD', 'DOGE/USD'
-        ]
-    
-    async def get_market_data(self, symbol: str, timeframe: TimeFrame,
-                            start_date: Optional[datetime] = None,
-                            end_date: Optional[datetime] = None) -> MarketData:
-        """
-        Get complete market data object for a symbol.
+        Start real-time data streaming for a symbol.
         
         Args:
-            symbol: Trading symbol
-            timeframe: Data timeframe
-            start_date: Start date for data (optional)
-            end_date: End date for data (optional)
-            
-        Returns:
-            MarketData object with OHLCV data and metadata
+            symbol: Symbol to stream
+            on_bar: Callback function for bar data
         """
-        # Use default date range if not provided
-        if end_date is None:
-            end_date = datetime.now()
+        if not self._connected or not self.stream_client:
+            raise ConnectionError("Not connected to Alpaca Markets")
         
-        if start_date is None:
-            # Default to 100 periods of data
-            start_date = end_date - timedelta(days=100)
-        
-        # Get historical data
-        ohlcv_data = await self.get_historical_data(symbol, timeframe, start_date, end_date)
-        
-        # Create MarketData object
-        market_data = MarketData(
-            symbol=symbol,
-            timeframe=timeframe,
-            data=ohlcv_data,
-            indicators={},  # Will be populated by indicator calculators
-            last_updated=datetime.now()
-        )
-        
-        return market_data
-    
-    def get_supported_timeframes(self) -> List[TimeFrame]:
-        """Get list of supported timeframes."""
-        return [
-            TimeFrame.MINUTE_1,
-            TimeFrame.MINUTE_5,
-            TimeFrame.MINUTE_15,
-            TimeFrame.MINUTE_30,
-            TimeFrame.HOUR_1,
-            TimeFrame.HOUR_4,
-            TimeFrame.DAILY,
-            TimeFrame.WEEKLY,
-            TimeFrame.MONTHLY
-        ]
-    
-    def get_supported_symbols(self) -> List[str]:
-        """Get list of supported symbols."""
-        # This would typically query Alpaca's assets endpoint
-        # For now, return the same list as get_symbols
-        return [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
-            'SPY', 'QQQ', 'IWM', 'VTI', 'VOO',
-            'BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD', 'DOGE/USD'
-        ]
-    
-    # Real-time streaming methods
-    
-    async def start_streaming(self, symbols: List[str], 
-                            on_bar: Optional[Callable] = None,
-                            on_trade: Optional[Callable] = None,
-                            on_quote: Optional[Callable] = None) -> None:
-        """
-        Start real-time data streaming for specified symbols.
-        
-        Args:
-            symbols: List of symbols to stream
-            on_bar: Callback for bar/candle data
-            on_trade: Callback for trade data
-            on_quote: Callback for quote data
-        """
-        if not self.stock_stream:
-            raise ConnectionError("Streaming requires authenticated connection")
+        if self._stream_active:
+            logger.warning("Stream already active")
+            return
         
         try:
-            # Separate stock and crypto symbols
-            stock_symbols = [s for s in symbols if '/' not in s]
-            crypto_symbols = [s for s in symbols if '/' in s]
+            # Store handler
+            if on_bar:
+                self._stream_handlers[symbol] = on_bar
             
-            # Set up stock streaming
-            if stock_symbols:
-                if on_bar:
-                    self.stock_stream.subscribe_bars(self._wrap_bar_handler(on_bar), *stock_symbols)
-                
-                if on_trade:
-                    self.stock_stream.subscribe_trades(self._wrap_trade_handler(on_trade), *stock_symbols)
-                
-                if on_quote:
-                    self.stock_stream.subscribe_quotes(self._wrap_quote_handler(on_quote), *stock_symbols)
+            # Set up bar subscription
+            async def bar_handler(bar):
+                try:
+                    bar_data = {
+                        'timestamp': bar.timestamp,
+                        'symbol': bar.symbol,
+                        'open': float(bar.open),
+                        'high': float(bar.high),
+                        'low': float(bar.low),
+                        'close': float(bar.close),
+                        'volume': float(bar.volume) if bar.volume is not None else 0.0
+                    }
+                    
+                    # Call user handler
+                    if symbol in self._stream_handlers:
+                        await self._stream_handlers[symbol](bar_data)
+                        
+                except Exception as e:
+                    logger.error(f"Error in bar handler: {e}")
             
-            # Set up crypto streaming
-            if crypto_symbols and self.crypto_stream:
-                if on_bar:
-                    self.crypto_stream.subscribe_bars(self._wrap_bar_handler(on_bar), *crypto_symbols)
-                
-                if on_trade:
-                    self.crypto_stream.subscribe_trades(self._wrap_trade_handler(on_trade), *crypto_symbols)
-                
-                if on_quote:
-                    self.crypto_stream.subscribe_quotes(self._wrap_quote_handler(on_quote), *crypto_symbols)
+            # Subscribe to bars and start streaming
+            self.stream_client.subscribe_bars(bar_handler, symbol)
             
-            # Start streaming
-            if stock_symbols:
-                asyncio.create_task(self.stock_stream.run())
+            def run_stream():
+                try:
+                    self.stream_client.run()
+                except Exception as e:
+                    logger.error(f"Streaming error: {e}")
+                    self._stream_active = False
             
-            if crypto_symbols and self.crypto_stream:
-                asyncio.create_task(self.crypto_stream.run())
+            self._stream_thread = Thread(target=run_stream, daemon=True)
+            self._stream_thread.start()
+            self._stream_active = True
             
-            self._stream_connected = True
-            logger.info(f"Started streaming for {len(symbols)} symbols")
+            logger.info(f"Started streaming for {symbol}")
             
         except Exception as e:
-            error_msg = f"Error starting stream: {str(e)}"
-            self._set_error(error_msg)
+            error_msg = f"Error starting stream for {symbol}: {str(e)}"
             logger.error(error_msg)
+            self._set_error(error_msg)
             raise ConnectionError(error_msg)
-    
-    def _wrap_bar_handler(self, handler: Callable) -> Callable:
-        """Wrap bar handler to convert Alpaca format to internal format."""
-        async def wrapped_handler(bar):
-            try:
-                ohlcv = self._alpaca_bar_to_ohlcv(bar, bar.symbol)
-                await handler(ohlcv)
-            except Exception as e:
-                logger.error(f"Error in bar handler: {e}")
-        
-        return wrapped_handler
-    
-    def _wrap_trade_handler(self, handler: Callable) -> Callable:
-        """Wrap trade handler to convert Alpaca format to internal format."""
-        async def wrapped_handler(trade):
-            try:
-                trade_data = {
-                    'symbol': trade.symbol,
-                    'price': float(trade.price),
-                    'size': float(trade.size),
-                    'timestamp': trade.timestamp,
-                    'exchange': getattr(trade, 'exchange', None)
-                }
-                await handler(trade_data)
-            except Exception as e:
-                logger.error(f"Error in trade handler: {e}")
-        
-        return wrapped_handler
-    
-    def _wrap_quote_handler(self, handler: Callable) -> Callable:
-        """Wrap quote handler to convert Alpaca format to internal format."""
-        async def wrapped_handler(quote):
-            try:
-                quote_data = {
-                    'symbol': quote.symbol,
-                    'bid_price': float(quote.bid_price) if hasattr(quote, 'bid_price') else None,
-                    'ask_price': float(quote.ask_price) if hasattr(quote, 'ask_price') else None,
-                    'bid_size': float(quote.bid_size) if hasattr(quote, 'bid_size') else None,
-                    'ask_size': float(quote.ask_size) if hasattr(quote, 'ask_size') else None,
-                    'timestamp': quote.timestamp
-                }
-                await handler(quote_data)
-            except Exception as e:
-                logger.error(f"Error in quote handler: {e}")
-        
-        return wrapped_handler
     
     async def stop_streaming(self) -> None:
         """Stop all real-time data streaming."""
         try:
-            if self.stock_stream and self._stream_connected:
-                await self.stock_stream.stop_ws()
-            
-            if self.crypto_stream and self._stream_connected:
-                await self.crypto_stream.stop_ws()
-            
-            self._stream_connected = False
-            logger.info("Stopped data streaming")
+            if self.stream_client and self._stream_active:
+                await self.stream_client.stop_ws()
+                self._stream_active = False
+                
+                # Wait for thread to finish
+                if self._stream_thread and self._stream_thread.is_alive():
+                    self._stream_thread.join(timeout=5.0)
+                
+                self._stream_handlers.clear()
+                logger.info("Stopped data streaming")
             
         except Exception as e:
             error_msg = f"Error stopping stream: {str(e)}"
@@ -602,18 +401,54 @@ class AlpacaProvider(DataProvider):
     
     def is_streaming(self) -> bool:
         """Check if streaming is active."""
-        return self._stream_connected
+        return self._stream_active
     
-    def get_provider_info(self) -> Dict[str, Any]:
-        """Get detailed provider information."""
-        info = super().get_provider_info()
-        info.update({
-            'feed': self.feed,
-            'crypto_feed': self.crypto_feed,
-            'paper_trading': self.paper,
-            'streaming_active': self._stream_connected,
-            'supported_assets': ['stocks', 'crypto'],
-            'real_time_data': True,
-            'historical_data': True
-        })
-        return info
+    def get_supported_timeframes(self) -> List[str]:
+        """Get list of supported timeframes."""
+        return list(self.TIMEFRAME_MAPPING.keys())
+    
+    def get_supported_symbols(self) -> List[str]:
+        """Get list of supported symbols from environment."""
+        symbols_str = os.getenv('SUPPORTED_SYMBOLS', '')
+        if symbols_str:
+            return [s.strip() for s in symbols_str.split(',') if s.strip()]
+        return []
+    
+    async def get_symbols(self) -> List[str]:
+        """Get list of available symbols."""
+        return self.get_supported_symbols()
+    
+    async def get_market_data(self, symbol: str, timeframe: str,
+                            start_date: Optional[datetime] = None,
+                            end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Get complete market data object for a symbol.
+        
+        Args:
+            symbol: Trading symbol
+            timeframe: Data timeframe ('1h' or '1d')
+            start_date: Start date for data (optional)
+            end_date: End date for data (optional)
+            
+        Returns:
+            Dictionary with OHLCV data and metadata
+        """
+        # Use default date range if not provided
+        if end_date is None:
+            end_date = datetime.now()
+        
+        if start_date is None:
+            start_date = end_date - timedelta(days=30)
+        
+        # Get historical data
+        ohlcv_data = await self.get_historical_data(symbol, timeframe, start_date, end_date)
+        
+        # Create market data dictionary
+        return {
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'data': ohlcv_data,
+            'last_updated': datetime.now(),
+            'start_date': start_date,
+            'end_date': end_date
+        }

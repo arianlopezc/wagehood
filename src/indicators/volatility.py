@@ -7,7 +7,9 @@ Average True Range (ATR), Keltner Channels, and Donchian Channels.
 
 import numpy as np
 from typing import Union, Tuple, Optional
-from ..core.constants import BB_PERIOD, BB_STD_DEV
+# Constants - previously imported from ..core.constants
+BB_PERIOD = 20
+BB_STD_DEV = 2.0
 from .moving_averages import calculate_sma, calculate_ema
 
 

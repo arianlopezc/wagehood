@@ -7,7 +7,9 @@ Exponential Moving Average (EMA), Weighted Moving Average (WMA), and Volume Weig
 
 import numpy as np
 from typing import Union, Optional
-from ..core.constants import MA_FAST, MA_SLOW
+# Constants - previously imported from ..core.constants
+MA_FAST = 12
+MA_SLOW = 26
 
 
 def calculate_sma(data: Union[np.ndarray, list], period: int) -> np.ndarray:

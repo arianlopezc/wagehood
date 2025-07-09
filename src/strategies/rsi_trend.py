@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
-from ..core.models import Signal, SignalType, MarketData
+# Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.momentum import calculate_rsi
 
 logger = logging.getLogger(__name__)
@@ -69,8 +69,8 @@ class RSITrendFollowing(TradingStrategy):
         super().__init__("RSITrendFollowing", default_params)
 
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate RSI trend following signals
 
@@ -156,8 +156,8 @@ class RSITrendFollowing(TradingStrategy):
             return "sideways"
 
     def _check_uptrend_signal(
-        self, data: MarketData, rsi_values: np.ndarray, index: int
-    ) -> Signal:
+        self, data: Dict[str, Any], rsi_values: np.ndarray, index: int
+    ) -> Dict[str, Any]:
         """Check for uptrend pullback signal"""
 
         current_rsi = rsi_values[index]
@@ -194,27 +194,27 @@ class RSITrendFollowing(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.BUY,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "BUY",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="RSI Uptrend Pullback",
                 rsi_value=current_rsi,
                 trend="uptrend",
                 entry_type="pullback",
                 **confidence_factors,
             ),
-        )
+        }
 
         return signal
 
     def _check_downtrend_signal(
-        self, data: MarketData, rsi_values: np.ndarray, index: int
-    ) -> Signal:
+        self, data: Dict[str, Any], rsi_values: np.ndarray, index: int
+    ) -> Dict[str, Any]:
         """Check for downtrend rally signal"""
 
         current_rsi = rsi_values[index]
@@ -253,26 +253,26 @@ class RSITrendFollowing(TradingStrategy):
         current_price = arrays["close"][index]
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.SELL,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "SELL",
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="RSI Downtrend Rally",
                 rsi_value=current_rsi,
                 trend="downtrend",
                 entry_type="rally",
                 **confidence_factors,
             ),
-        )
+        }
 
         return signal
 
     def _calculate_uptrend_confidence(
-        self, data: MarketData, rsi_values: np.ndarray, index: int
+        self, data: Dict[str, Any], rsi_values: np.ndarray, index: int
     ) -> Dict[str, float]:
         """Calculate confidence factors for uptrend signals"""
 
@@ -304,7 +304,7 @@ class RSITrendFollowing(TradingStrategy):
         return confidence_factors
 
     def _calculate_downtrend_confidence(
-        self, data: MarketData, rsi_values: np.ndarray, index: int
+        self, data: Dict[str, Any], rsi_values: np.ndarray, index: int
     ) -> Dict[str, float]:
         """Calculate confidence factors for downtrend signals"""
 
@@ -361,7 +361,7 @@ class RSITrendFollowing(TradingStrategy):
         return strength
 
     def _calculate_price_momentum(
-        self, data: MarketData, index: int, trend_type: str
+        self, data: Dict[str, Any], index: int, trend_type: str
     ) -> float:
         """Calculate price momentum supporting the trend"""
 
@@ -410,8 +410,8 @@ class RSITrendFollowing(TradingStrategy):
         return momentum
 
     def _check_divergence_signal(
-        self, data: MarketData, rsi_values: np.ndarray, index: int
-    ) -> Signal:
+        self, data: Dict[str, Any], rsi_values: np.ndarray, index: int
+    ) -> Dict[str, Any]:
         """Check for RSI divergence signals"""
 
         # Need at least 20 periods for divergence detection
@@ -493,8 +493,8 @@ class RSITrendFollowing(TradingStrategy):
         return price_val2 > price_val1 and rsi_val2 < rsi_val1
 
     def _create_divergence_signal(
-        self, data: MarketData, index: int, direction: str
-    ) -> Signal:
+        self, data: Dict[str, Any], index: int, direction: str
+    ) -> Dict[str, Any]:
         """Create divergence signal"""
 
         arrays = data.to_arrays()
@@ -506,22 +506,22 @@ class RSITrendFollowing(TradingStrategy):
         if confidence < self.parameters["min_confidence"]:
             return None
 
-        signal_type = SignalType.BUY if direction == "bullish" else SignalType.SELL
+        signal_type = "BUY" if direction == "bullish" else "SELL"
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=signal_type,
-            price=current_price,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": signal_type,
+            "price": current_price,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name=f"RSI {direction.title()} Divergence",
                 divergence_type=direction,
                 entry_type="divergence",
             ),
-        )
+        }
 
         return signal
 
@@ -633,19 +633,19 @@ class RSITrendFollowing(TradingStrategy):
             "trend_confirmation_periods": [5, 10, 15],
         }
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Strategy-specific signal validation"""
 
         # Check if signal type is appropriate
-        if signal.signal_type not in [SignalType.BUY, SignalType.SELL]:
+        if signal.get("signal_type") not in ["BUY", "SELL"]:
             return False
 
         # Check confidence threshold
-        if signal.confidence < self.parameters["min_confidence"]:
+        if signal.get("confidence", 0) < self.parameters["min_confidence"]:
             return False
 
         # Check metadata for required fields
-        metadata = signal.metadata
+        metadata = signal.get("metadata", {})
         if "signal_name" not in metadata or "entry_type" not in metadata:
             return False
 

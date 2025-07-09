@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from .base import TradingStrategy
-from ..core.models import Signal, SignalType, MarketData
+# Note: Signal types are simplified to basic Python types since core.models doesn't exist
 from ..indicators.levels import calculate_support_resistance
 
 logger = logging.getLogger(__name__)
@@ -64,8 +64,8 @@ class SupportResistanceBreakout(TradingStrategy):
         super().__init__("SupportResistanceBreakout", default_params)
 
     def generate_signals(
-        self, data: MarketData, indicators: Dict[str, Any]
-    ) -> List[Signal]:
+        self, data: Dict[str, Any], indicators: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """
         Generate support/resistance breakout signals
 
@@ -323,14 +323,14 @@ class SupportResistanceBreakout(TradingStrategy):
 
     def _check_resistance_breakout(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         level_info: Dict[str, Any],
         close_prices: np.ndarray,
         high_prices: np.ndarray,
         volume_data: np.ndarray,
         avg_volume: float,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Check for resistance breakout signal"""
 
         resistance_level = level_info["price"]
@@ -376,14 +376,14 @@ class SupportResistanceBreakout(TradingStrategy):
         arrays = data.to_arrays()
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.BUY,
-            price=current_close,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "BUY",
+            "price": current_close,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Resistance Breakout",
                 level_price=resistance_level,
                 level_type="resistance",
@@ -392,20 +392,20 @@ class SupportResistanceBreakout(TradingStrategy):
                 breakout_strength=(current_close - resistance_level) / resistance_level,
                 consolidation=consolidation,
             ),
-        )
+        }
 
         return signal
 
     def _check_support_breakout(
         self,
-        data: MarketData,
+        data: Dict[str, Any],
         index: int,
         level_info: Dict[str, Any],
         close_prices: np.ndarray,
         low_prices: np.ndarray,
         volume_data: np.ndarray,
         avg_volume: float,
-    ) -> Signal:
+    ) -> Dict[str, Any]:
         """Check for support breakout signal"""
 
         support_level = level_info["price"]
@@ -451,14 +451,14 @@ class SupportResistanceBreakout(TradingStrategy):
         arrays = data.to_arrays()
 
         # Create signal
-        signal = Signal(
-            timestamp=arrays["timestamp"][index],
-            symbol=data.symbol,
-            signal_type=SignalType.SELL,
-            price=current_close,
-            confidence=confidence,
-            strategy_name=self.name,
-            metadata=self.get_signal_metadata(
+        signal = {
+            "timestamp": arrays["timestamp"][index],
+            "symbol": data.get("symbol", "UNKNOWN"),
+            "signal_type": "SELL",
+            "price": current_close,
+            "confidence": confidence,
+            "strategy_name": self.name,
+            "metadata": self.get_signal_metadata(
                 signal_name="Support Breakout",
                 level_price=support_level,
                 level_type="support",
@@ -467,7 +467,7 @@ class SupportResistanceBreakout(TradingStrategy):
                 breakout_strength=(support_level - current_close) / support_level,
                 consolidation=consolidation,
             ),
-        )
+        }
 
         return signal
 
@@ -664,19 +664,19 @@ class SupportResistanceBreakout(TradingStrategy):
             "breakout_strength_weight": [0.3, 0.4, 0.5],
         }
 
-    def _validate_signal_strategy(self, signal: Signal) -> bool:
+    def _validate_signal_strategy(self, signal: Dict[str, Any]) -> bool:
         """Strategy-specific signal validation"""
 
         # Check if signal type is appropriate
-        if signal.signal_type not in [SignalType.BUY, SignalType.SELL]:
+        if signal.get("signal_type") not in ["BUY", "SELL"]:
             return False
 
         # Check confidence threshold
-        if signal.confidence < self.parameters["min_confidence"]:
+        if signal.get("confidence", 0) < self.parameters["min_confidence"]:
             return False
 
         # Check metadata for required fields
-        metadata = signal.metadata
+        metadata = signal.get("metadata", {})
         required_fields = ["signal_name", "level_price", "level_type", "touch_count"]
 
         if not all(field in metadata for field in required_fields):
@@ -691,13 +691,13 @@ class SupportResistanceBreakout(TradingStrategy):
         # Validate level type matches signal type
         if (
             metadata["level_type"] == "resistance"
-            and signal.signal_type != SignalType.BUY
+            and signal.get("signal_type") != "BUY"
         ):
             return False
 
         if (
             metadata["level_type"] == "support"
-            and signal.signal_type != SignalType.SELL
+            and signal.get("signal_type") != "SELL"
         ):
             return False
 
