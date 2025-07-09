@@ -369,7 +369,6 @@ indicator_output/
 
 # Demo and testing scripts (if they contain sensitive data)
 demo_*.py
-test_*.py
 debug_*.py
 validate_*.py
 populate_*.py
