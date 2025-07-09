@@ -39,6 +39,98 @@ The system supports multi-dimensional signal analysis across:
 | **Support/Resistance Breakout** | Level breakouts | 1h, 4h, 1d | Medium/Long-term | Level-based breakout signal detection |
 | **Moving Average Crossover** | MA crossover signals | 1d, 1w, 1M | Long-term | Golden/Death cross signal detection |
 
+## 🎯 Signal Generation Conditions
+
+Each strategy generates buy/sell signals based on specific technical conditions:
+
+### MACD+RSI Combined Strategy
+**Buy Signal Conditions:**
+- MACD line crosses above signal line (bullish crossover)
+- RSI exits oversold territory (above 30) OR RSI is above 50 with positive momentum
+- Volume exceeds 1.3x average volume (confirmation)
+- MACD histogram shows positive momentum
+
+**Sell Signal Conditions:**
+- MACD line crosses below signal line (bearish crossover)
+- RSI exits overbought territory (below 70) OR RSI is below 50 with negative momentum
+- Volume exceeds 1.3x average volume (confirmation)
+- MACD histogram shows negative momentum
+
+**Confidence Factors:**
+- MACD signal strength (20%), RSI position (20%), histogram momentum (15%)
+- Volume confirmation (15%), price momentum (15%), trend alignment (10%)
+- Signal timing quality (5%)
+
+### RSI Trend Following Strategy
+**Buy Signal Conditions:**
+- Primary RSI (14-period) in pullback zone (40-50) during uptrend
+- RSI turns upward from pullback zone
+- Trend confirmed by 70% of periods with RSI above 50
+- Volume above average for confirmation
+
+**Sell Signal Conditions:**
+- Primary RSI (14-period) in rally zone (50-60) during downtrend
+- RSI turns downward from rally zone
+- Trend confirmed by 70% of periods with RSI below 50
+- Volume above average for confirmation
+
+**Confidence Factors:**
+- RSI position relative to trend zones, trend strength validation
+- RSI momentum direction, price momentum confirmation
+
+### Bollinger Band Breakout Strategy
+**Buy Signal Conditions:**
+- Price closes above upper Bollinger Band (20-period, 2 std dev)
+- High of the period breaks above upper band
+- Volume significantly above 20-period average
+- Band width expansion after consolidation (squeeze)
+
+**Sell Signal Conditions:**
+- Price closes below lower Bollinger Band (20-period, 2 std dev)
+- Low of the period breaks below lower band
+- Volume significantly above 20-period average
+- Band width expansion after consolidation (squeeze)
+
+**Confidence Factors:**
+- Breakout strength (30%), band width expansion (20%)
+- Volume confirmation (30%), price momentum (20%)
+
+### Support/Resistance Breakout Strategy
+**Buy Signal Conditions:**
+- Price closes above identified resistance level
+- High of the period breaks above resistance level
+- Resistance level validated by minimum 2 touches
+- Volume exceeds 20-period average
+- Level strength confirmed by touch count and hold ratio
+
+**Sell Signal Conditions:**
+- Price closes below identified support level
+- Low of the period breaks below support level
+- Support level validated by minimum 2 touches
+- Volume exceeds 20-period average
+- Level strength confirmed by touch count and hold ratio
+
+**Confidence Factors:**
+- Level strength (30%), breakout strength (40%)
+- Volume confirmation (20%), touch count validation (10%)
+
+### Moving Average Crossover Strategy
+**Buy Signal Conditions:**
+- Short EMA (50-period) crosses above long EMA (200-period) - Golden Cross
+- Price closes above both EMAs
+- Volume exceeds 1.2x average volume
+- EMA separation indicates strong momentum
+
+**Sell Signal Conditions:**
+- Short EMA (50-period) crosses below long EMA (200-period) - Death Cross
+- Price closes below both EMAs
+- Volume exceeds 1.2x average volume
+- EMA separation indicates strong momentum
+
+**Confidence Factors:**
+- EMA separation strength (40%), volume confirmation (30%)
+- Trend strength and momentum (30%)
+
 ### Analysis Profiles
 
 **Short-Term Analysis:**

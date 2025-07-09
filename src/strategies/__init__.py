@@ -56,7 +56,7 @@ DEFAULT_STRATEGY_PARAMS = {
         "rsi_period": 14,
         "rsi_oversold": 30,
         "rsi_overbought": 70,
-        "min_confidence": 0.6,
+        "min_confidence": 0.7,  # Higher threshold for quality signals
         "volume_confirmation": True,
         "volume_threshold": 1.2,
         "divergence_detection": True,

@@ -471,12 +471,9 @@ class NotificationService:
                 )
                 return False
 
-            # Check confidence threshold
-            if not self.config.should_notify_confidence(confidence):
-                logger.debug(
-                    f"Signal confidence {confidence} below threshold {self.config.min_confidence_threshold}"
-                )
-                return False
+            # Confidence threshold removed - send all signals regardless of confidence
+            logger.debug(f"Signal confidence {confidence} - sending notification (no threshold)")
+            # Note: Confidence threshold check removed to send all detected signals
 
             # Check source timeframes if available
             source_timeframes = signal_data.get("source_timeframes", [])

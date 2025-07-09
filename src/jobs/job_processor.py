@@ -341,6 +341,9 @@ class JobProcessor:
                 "metadata": signal.metadata,
             }
             signals_data.append(signal_dict)
+        
+        # Sort signals by timestamp in descending order (newest first)
+        signals_data.sort(key=lambda x: x["timestamp"], reverse=True)
 
         # Calculate signal quality metrics
         total_signals = len(signals_data)

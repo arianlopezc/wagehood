@@ -213,6 +213,9 @@ class JobSubmissionCLI:
         # Parse signal data
         signals_data = json.loads(results.get("signals", "[]"))
         
+        # Sort signals by timestamp in descending order (newest first)
+        signals_data.sort(key=lambda x: x["timestamp"], reverse=True)
+        
         # Signal analysis metrics
         total_signals = len(signals_data)
         buy_signals = sum(1 for s in signals_data if s["type"] == "buy")
@@ -312,7 +315,9 @@ class JobSubmissionCLI:
             print(f"{'Date':<12} {'Time':<8} {'Type':<6} {'Price':<10} {'Conf':<6} {'Strategy':<15} {'Context'}")
             print("─" * 80)
             
-            for signal in signals_data[:50]:  # Limit to first 50 signals
+            # Show all signals with pagination for better UX
+            max_signals_to_show = 100  # Increased from 50 to 100
+            for signal in signals_data[:max_signals_to_show]:  # Show more signals
                 timestamp = signal["timestamp"]
                 date = timestamp[:10]  # Extract date
                 time_str = timestamp[11:19]  # Extract time
@@ -334,8 +339,10 @@ class JobSubmissionCLI:
                 
                 print(f"{date:<12} {time_str:<8} {signal_type:<6} ${price:<9.2f} {confidence:<5.2f} {strategy_name:<15} {context}")
             
-            if len(signals_data) > 50:
-                print(f"... and {len(signals_data) - 50} more signals")
+            if len(signals_data) > max_signals_to_show:
+                remaining_signals = len(signals_data) - max_signals_to_show
+                print(f"... and {remaining_signals} more signals")
+                print(f"💡 Tip: Use pagination or export functionality to view all {len(signals_data)} signals")
         
         # Signal timing analysis
         if signals_data:
