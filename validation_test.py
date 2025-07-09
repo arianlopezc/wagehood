@@ -811,9 +811,9 @@ class ValidationTestSuite:
             
             # Test display calculations
             total_signals = len(signals_data)
-            buy_signals = sum(1 for s in signals_data if s["type"] == "BUY")
-            sell_signals = sum(1 for s in signals_data if s["type"] == "SELL")
-            hold_signals = sum(1 for s in signals_data if s["type"] == "HOLD")
+            buy_signals = sum(1 for s in signals_data if s["type"] == "buy")
+            sell_signals = sum(1 for s in signals_data if s["type"] == "sell")
+            hold_signals = sum(1 for s in signals_data if s["type"] == "hold")
             
             confidences = [float(s["confidence"]) for s in signals_data if s["confidence"] is not None]
             avg_confidence = sum(confidences) / len(confidences) if confidences else 0
