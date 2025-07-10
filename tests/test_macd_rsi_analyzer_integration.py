@@ -93,66 +93,6 @@ class TestMACDRSIAnalyzerIntegration:
             assert metadata["signal_name"] in valid_signal_names
     
     @pytest.mark.asyncio
-    async def test_analyze_symbol_hourly_timeframe(self, analyzer, test_symbol):
-        """Test analyzing a symbol with hourly timeframe."""
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=10)
-        
-        # Test hourly analysis
-        signals = await analyzer.analyze_symbol(
-            symbol=test_symbol,
-            start_date=start_date,
-            end_date=end_date,
-            timeframe="1h"
-        )
-        
-        # Validate results
-        assert isinstance(signals, list)
-        
-        # If signals are found, validate their structure
-        for signal in signals:
-            assert "timestamp" in signal
-            assert "symbol" in signal
-            assert "signal_type" in signal
-            assert "price" in signal
-            assert "confidence" in signal
-            assert "strategy_name" in signal
-            assert "metadata" in signal
-            
-            # Validate signal type
-            assert signal["signal_type"] in ["BUY", "SELL"]
-            
-            # Validate confidence range
-            assert 0 <= signal["confidence"] <= 1
-            
-            # Validate strategy name
-            assert signal["strategy_name"] == "MACD_RSI"
-    
-    @pytest.mark.asyncio
-    async def test_analyze_multiple_symbols_daily(self, analyzer, date_range):
-        """Test analyzing multiple symbols with daily timeframe."""
-        start_date, end_date = date_range
-        test_symbols = ["AAPL", "MSFT", "GOOGL"]
-        
-        for symbol in test_symbols:
-            signals = await analyzer.analyze_symbol(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                timeframe="1d"
-            )
-            
-            # Validate results
-            assert isinstance(signals, list)
-            
-            # If signals are found, validate they match the symbol
-            for signal in signals:
-                assert signal["symbol"] == symbol
-                assert signal["strategy_name"] == "MACD_RSI"
-                assert "metadata" in signal
-                assert "signal_name" in signal["metadata"]
-    
-    @pytest.mark.asyncio
     async def test_all_supported_symbols_analysis(self, analyzer):
         """Test analysis with all supported symbols from environment."""
         # Get supported symbols

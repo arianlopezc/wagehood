@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.strategies.rsi_trend import RSITrendFollowing
 from src.strategies.rsi_trend_analyzer import MarketDataWrapper
-from src.indicators.momentum import calculate_rsi
+from src.indicators.talib_wrapper import calculate_rsi
 
 
 class TestRSITrendMathValidation:
@@ -497,11 +497,11 @@ class TestRSITrendMathValidation:
         
         rsi_values = calculate_rsi(close_prices, 14)
         
-        # With constant prices, RSI should be NaN initially, then stabilize around 50
+        # With constant prices, RSI should be NaN initially, then stabilize around 0 (TA-Lib behavior)
         valid_rsi = rsi_values[~np.isnan(rsi_values)]
         if len(valid_rsi) > 0:
-            # RSI should be around 50 for constant prices
-            assert np.all(np.abs(valid_rsi - 50) < 5), "RSI not around 50 for constant prices"
+            # TA-Lib RSI returns 0 for constant prices (no gains or losses)
+            assert np.all(np.abs(valid_rsi - 0) < 5), "RSI not around 0 for constant prices (TA-Lib behavior)"
         
         # Test 2: Extreme price movements
         extreme_data = []

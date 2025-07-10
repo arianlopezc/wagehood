@@ -1,7 +1,7 @@
 """
 Alpaca Markets Data Provider
 
-This module implements the Alpaca Markets data provider using the official alpaca-py SDK.
+This module implements the Alpaca Markets data provider using alpaca-trade-api.
 Supports historical data retrieval and real-time streaming for stock market data.
 """
 
@@ -12,26 +12,21 @@ from typing import List, Dict, Any, Optional, Callable
 from threading import Thread
 
 try:
-    from alpaca.data.historical import StockHistoricalDataClient
-    from alpaca.data.live import StockDataStream
-    from alpaca.data.requests import StockBarsRequest
-    from alpaca.data.timeframe import TimeFrame
-    from alpaca.common.exceptions import APIError
+    import alpaca_trade_api as tradeapi
+    from alpaca_trade_api.common import URL
     ALPACA_AVAILABLE = True
 except ImportError:
     ALPACA_AVAILABLE = False
     # Define dummy classes to avoid NameError
-    class StockHistoricalDataClient:
-        pass
-    class StockDataStream:
-        pass
-    class StockBarsRequest:
-        pass
-    class TimeFrame:
-        Hour = None
-        Day = None
-    class APIError(Exception):
-        pass
+    class tradeapi:
+        REST = None
+        Stream = None
+        TimeFrame = None
+        TimeFrameUnit = None
+    
+    class URL:
+        def __init__(self, url):
+            pass
 
 from .base import DataProvider, ConnectionError, DataRetrievalError
 
@@ -40,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 class AlpacaProvider(DataProvider):
     """
-    Alpaca Markets data provider implementation using official alpaca-py SDK.
+    Alpaca Markets data provider implementation using alpaca-trade-api.
     
     Provides access to:
     - Historical OHLCV data with 1-hour and 1-day timeframes
@@ -49,8 +44,8 @@ class AlpacaProvider(DataProvider):
     
     # Supported timeframes mapping
     TIMEFRAME_MAPPING = {
-        '1h': TimeFrame.Hour,
-        '1d': TimeFrame.Day
+        '1h': tradeapi.TimeFrame.Hour,
+        '1d': tradeapi.TimeFrame.Day
     }
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -64,13 +59,13 @@ class AlpacaProvider(DataProvider):
                 - paper: Use paper trading environment (default: True)
         """
         if not ALPACA_AVAILABLE:
-            raise ImportError("alpaca-py is required for AlpacaProvider. Install with: pip install alpaca-py")
+            raise ImportError("alpaca-trade-api is required for AlpacaProvider. Install with: pip install alpaca-trade-api")
         
         super().__init__("Alpaca", config)
         
         # Get credentials from config or environment
-        self.api_key = self.config.get('api_key') or os.getenv('ALPACA_API_KEY')
-        self.secret_key = self.config.get('secret_key') or os.getenv('ALPACA_SECRET_KEY')
+        self.api_key = self.config.get('api_key') or os.getenv('ALPACA_API_KEY') or os.getenv('APCA_API_KEY_ID')
+        self.secret_key = self.config.get('secret_key') or os.getenv('ALPACA_SECRET_KEY') or os.getenv('APCA_API_SECRET_KEY')
         self.paper = self.config.get('paper', True)
         
         # Validate credentials
@@ -81,7 +76,7 @@ class AlpacaProvider(DataProvider):
             )
         
         # Initialize clients
-        self.historical_client = None
+        self.rest_client = None
         self.stream_client = None
         
         # Streaming state
@@ -102,14 +97,18 @@ class AlpacaProvider(DataProvider):
             self._clear_error()
             
             # Initialize clients
-            self.historical_client = StockHistoricalDataClient(
-                api_key=self.api_key,
-                secret_key=self.secret_key
+            base_url = URL('https://paper-api.alpaca.markets') if self.paper else URL('https://api.alpaca.markets')
+            
+            self.rest_client = tradeapi.REST(
+                key_id=self.api_key,
+                secret_key=self.secret_key,
+                base_url=base_url
             )
             
-            self.stream_client = StockDataStream(
-                api_key=self.api_key,
-                secret_key=self.secret_key
+            self.stream_client = tradeapi.Stream(
+                key_id=self.api_key,
+                secret_key=self.secret_key,
+                base_url=base_url
             )
             
             # Test connection
@@ -142,28 +141,13 @@ class AlpacaProvider(DataProvider):
     async def _test_connection(self) -> None:
         """Test connection by making a simple API request."""
         try:
-            # Get test symbol from environment
-            symbols = self.get_supported_symbols()
-            test_symbol = symbols[0] if symbols else "SPY"
+            # Test connection with account info
+            account = self.rest_client.get_account()
             
-            # Test with minimal historical data request
-            request = StockBarsRequest(
-                symbol_or_symbols=[test_symbol],
-                timeframe=TimeFrame.Day,
-                start=datetime.now() - timedelta(days=2),
-                end=datetime.now(),
-                limit=1
-            )
-            
-            bars = self.historical_client.get_stock_bars(request)
-            
-            # Verify we got a response
-            if hasattr(bars, 'df') and not bars.df.empty:
-                logger.debug("Connection test successful")
-            elif hasattr(bars, 'data') and bars.data:
-                logger.debug("Connection test successful")  
+            if account:
+                logger.debug(f"Connection test successful - Account: {account.status}")
             else:
-                logger.warning("Connection test returned empty data")
+                logger.warning("Connection test returned no account data")
                 
         except Exception as e:
             raise ConnectionError(f"Connection test failed: {str(e)}")
@@ -190,26 +174,12 @@ class AlpacaProvider(DataProvider):
         ohlcv_data = []
         
         try:
-            # Handle DataFrame response format (most common)
+            # Handle DataFrame response format (alpaca-trade-api format)
             if hasattr(bars_response, 'df') and not bars_response.df.empty:
                 df = bars_response.df
                 
-                # Filter for specific symbol if multi-symbol response
-                if 'symbol' in df.index.names:
-                    if symbol in df.index.get_level_values('symbol'):
-                        symbol_df = df.loc[symbol]
-                    else:
-                        logger.warning(f"Symbol {symbol} not found in response")
-                        return []
-                else:
-                    symbol_df = df
-                
                 # Convert each row to OHLCV dictionary
-                for timestamp, row in symbol_df.iterrows():
-                    # Handle multi-index timestamp
-                    if isinstance(timestamp, tuple):
-                        timestamp = timestamp[-1]
-                    
+                for timestamp, row in df.iterrows():
                     ohlcv = {
                         'timestamp': timestamp,
                         'open': float(row['open']),
@@ -220,11 +190,15 @@ class AlpacaProvider(DataProvider):
                     }
                     ohlcv_data.append(ohlcv)
             
-            # Handle direct data access (alternative format)
-            elif hasattr(bars_response, 'data') and bars_response.data:
-                symbol_data = bars_response.data.get(symbol, [])
-                for bar in symbol_data:
-                    ohlcv_data.append(self._convert_bar_to_ohlcv(bar))
+            # Handle list of bars format (alpaca-trade-api)
+            elif hasattr(bars_response, '__iter__'):
+                for bar in bars_response:
+                    if hasattr(bar, 'timestamp'):
+                        ohlcv_data.append(self._convert_bar_to_ohlcv(bar))
+            
+            # Handle single bar
+            elif hasattr(bars_response, 'timestamp'):
+                ohlcv_data.append(self._convert_bar_to_ohlcv(bars_response))
             
         except Exception as e:
             logger.error(f"Error converting bars response: {e}")
@@ -248,22 +222,36 @@ class AlpacaProvider(DataProvider):
         Returns:
             List of OHLCV data dictionaries
         """
-        if not self._connected or not self.historical_client:
+        if not self._connected or not self.rest_client:
             raise ConnectionError("Not connected to Alpaca Markets")
         
         try:
-            # Create request
-            request = StockBarsRequest(
-                symbol_or_symbols=[symbol],
-                timeframe=self._get_alpaca_timeframe(timeframe),
-                start=start_date,
-                end=end_date,
-                limit=limit or 1000
-            )
-            
-            # Get data from Alpaca
+            # Get data from Alpaca using REST client
             logger.debug(f"Requesting historical data for {symbol} ({timeframe}) from {start_date} to {end_date}")
-            bars = self.historical_client.get_stock_bars(request)
+            
+            # Convert timeframe string to appropriate call
+            # Format dates for Alpaca API (YYYY-MM-DD format)
+            start_str = start_date.strftime('%Y-%m-%d')
+            end_str = end_date.strftime('%Y-%m-%d')
+            
+            if timeframe == '1d':
+                bars = self.rest_client.get_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Day,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
+            elif timeframe == '1h':
+                bars = self.rest_client.get_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Hour,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
+            else:
+                raise ValueError(f"Unsupported timeframe: {timeframe}")
             
             # Convert to our format
             ohlcv_data = self._convert_bars_to_dict(bars, symbol)
@@ -271,12 +259,6 @@ class AlpacaProvider(DataProvider):
             logger.info(f"Retrieved {len(ohlcv_data)} historical bars for {symbol}")
             return ohlcv_data
             
-        except APIError as e:
-            error_msg = f"Alpaca API error retrieving data for {symbol}: {str(e)}"
-            self._set_error(error_msg)
-            logger.error(error_msg)
-            raise DataRetrievalError(error_msg)
-        
         except ValueError as e:
             error_msg = f"Invalid parameters for {symbol}: {str(e)}"
             self._set_error(error_msg)
@@ -284,7 +266,12 @@ class AlpacaProvider(DataProvider):
             raise ValueError(error_msg)
         
         except Exception as e:
-            error_msg = f"Error retrieving historical data for {symbol}: {str(e)}"
+            # Check if it's an API error
+            if "API" in str(type(e).__name__) or "HTTPError" in str(type(e).__name__):
+                error_msg = f"Alpaca API error retrieving data for {symbol}: {str(e)}"
+            else:
+                error_msg = f"Error retrieving historical data for {symbol}: {str(e)}"
+            
             self._set_error(error_msg)
             logger.error(error_msg)
             raise DataRetrievalError(error_msg)

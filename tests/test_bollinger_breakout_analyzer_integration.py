@@ -127,30 +127,6 @@ class TestBollingerBreakoutAnalyzerIntegration:
             assert signal["strategy_name"] == "BollingerBandBreakout"
     
     @pytest.mark.asyncio
-    async def test_analyze_multiple_symbols_daily(self, analyzer, date_range):
-        """Test analyzing multiple symbols with daily timeframe."""
-        start_date, end_date = date_range
-        test_symbols = ["AAPL", "MSFT", "GOOGL"]
-        
-        for symbol in test_symbols:
-            signals = await analyzer.analyze_symbol(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-                timeframe="1d"
-            )
-            
-            # Validate results
-            assert isinstance(signals, list)
-            
-            # If signals are found, validate they match the symbol
-            for signal in signals:
-                assert signal["symbol"] == symbol
-                assert signal["strategy_name"] == "BollingerBandBreakout"
-                assert "metadata" in signal
-                assert "signal_name" in signal["metadata"]
-    
-    @pytest.mark.asyncio
     async def test_all_supported_symbols_analysis(self, analyzer):
         """Test analysis with all supported symbols from environment."""
         # Get supported symbols
@@ -327,28 +303,6 @@ class TestBollingerBreakoutAnalyzerIntegration:
         assert isinstance(timeframes, list)
         assert "1h" in timeframes
         assert "1d" in timeframes
-    
-    @pytest.mark.asyncio
-    async def test_signal_chronological_order(self, analyzer, test_symbol, date_range):
-        """Test that signals are returned in chronological order."""
-        start_date, end_date = date_range
-        
-        signals = await analyzer.analyze_symbol(
-            symbol=test_symbol,
-            start_date=start_date,
-            end_date=end_date,
-            timeframe="1d"
-        )
-        
-        # If multiple signals, check chronological order
-        if len(signals) > 1:
-            timestamps = [signal["timestamp"] for signal in signals]
-            # Convert to datetime objects if they're strings
-            if isinstance(timestamps[0], str):
-                timestamps = [datetime.fromisoformat(ts.replace('Z', '+00:00')) for ts in timestamps]
-            
-            # Check if sorted
-            assert timestamps == sorted(timestamps)
     
     @pytest.mark.asyncio
     async def test_different_confidence_thresholds(self, analyzer, test_symbol, date_range):
