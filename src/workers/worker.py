@@ -122,6 +122,21 @@ class JobWorker:
                 timeframe=request.timeframe
             )
             
+            # Convert signals to JSON-serializable format
+            serializable_signals = []
+            for signal in signals:
+                if isinstance(signal, dict):
+                    # Convert any pandas Timestamp objects to ISO format strings
+                    serializable_signal = {}
+                    for key, value in signal.items():
+                        if hasattr(value, 'isoformat'):  # pandas Timestamp or datetime
+                            serializable_signal[key] = value.isoformat()
+                        else:
+                            serializable_signal[key] = value
+                    serializable_signals.append(serializable_signal)
+                else:
+                    serializable_signals.append(signal)
+            
             # Format results
             result = {
                 'job_id': job.id,
@@ -130,8 +145,8 @@ class JobWorker:
                 'timeframe': request.timeframe,
                 'start_date': request.start_date,
                 'end_date': request.end_date,
-                'signals': signals,
-                'signal_count': len(signals),
+                'signals': serializable_signals,
+                'signal_count': len(serializable_signals),
                 'executed_at': time.time(),
                 'worker_id': self.worker_id
             }
