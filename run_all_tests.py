@@ -80,7 +80,7 @@ def categorize_tests(test_files: List[Path]) -> Dict[str, List[Path]]:
     for test_file in test_files:
         test_name = test_file.name.lower()
         
-        if "integration" in test_name:
+        if "integration" in test_name or "e2e" in test_name:
             categories["integration"].append(test_file)
         elif "validation" in test_name or "math" in test_name:
             categories["validation"].append(test_file)
@@ -147,8 +147,15 @@ def run_test_category(category: str, test_files: List[Path], verbose: bool = Fal
             cmd.append("-v")
         cmd.extend(["--tb=short"])
         
+        # Set timeout based on test type
+        timeout = 300  # Default 5 minutes
+        if "e2e" in test_file.name.lower():
+            timeout = 600  # 10 minutes for e2e tests
+        elif "integration" in test_file.name.lower():
+            timeout = 480  # 8 minutes for integration tests
+        
         # Run the test
-        return_code, stdout, stderr = run_command(cmd)
+        return_code, stdout, stderr = run_command(cmd, timeout=timeout)
         
         # Parse results
         file_result = {

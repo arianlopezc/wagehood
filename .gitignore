@@ -347,6 +347,10 @@ data/
 # Wagehood local development files
 .local/
 
+# Job processing system
+.jobs/
+.test_jobs/
+
 # Configuration files with sensitive data
 config.py
 config.ini
