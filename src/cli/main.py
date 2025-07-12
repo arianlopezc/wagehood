@@ -86,6 +86,35 @@ def submit(config_manager: ConfigManager, symbol: str, strategy: str,
         return
     
     try:
+        # Parse and validate dates
+        from datetime import datetime
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError as e:
+            click.echo(f"❌ Invalid date format. Use YYYY-MM-DD format: {str(e)}", err=True)
+            sys.exit(1)
+        
+        # Validate date range for timeframe
+        date_range = end_dt - start_dt
+        
+        if timeframe == "1h":
+            # For hourly data, limit to 26 days to stay well within Alpaca's 30-day limit
+            if date_range.days > 26:
+                click.echo(f"❌ Date range too large for hourly timeframe.", err=True)
+                click.echo(f"   Requested: {date_range.days} days", err=True)
+                click.echo(f"   Maximum allowed: 26 days", err=True)
+                click.echo(f"   Reason: Alpaca API limits hourly data to 30 days", err=True)
+                click.echo(f"💡 Try using a recent 26-day period or switch to daily timeframe", err=True)
+                sys.exit(1)
+        elif timeframe == "1d":
+            # For daily data, limit to 2 years
+            if date_range.days > 730:
+                click.echo(f"❌ Date range too large for daily timeframe.", err=True)
+                click.echo(f"   Requested: {date_range.days} days", err=True)
+                click.echo(f"   Maximum allowed: 730 days (2 years)", err=True)
+                sys.exit(1)
+        
         # Create job request
         request = JobRequest(
             symbol=symbol.upper(),

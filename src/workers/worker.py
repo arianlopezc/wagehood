@@ -11,14 +11,14 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from ..jobs.queue import JobQueue
-from ..jobs.models import Job, JobStatus
+from src.jobs.queue import JobQueue
+from src.jobs.models import Job, JobStatus
 
 # Import strategy analyzers
-from ..strategies.rsi_trend_analyzer import RSITrendAnalyzer
-from ..strategies.bollinger_breakout_analyzer import BollingerBreakoutAnalyzer
-from ..strategies.macd_rsi_analyzer import MACDRSIAnalyzer
-from ..strategies.sr_breakout_analyzer import SRBreakoutAnalyzer
+from src.strategies.rsi_trend_analyzer import RSITrendAnalyzer
+from src.strategies.bollinger_breakout_analyzer import BollingerBreakoutAnalyzer
+from src.strategies.macd_rsi_analyzer import MACDRSIAnalyzer
+from src.strategies.sr_breakout_analyzer import SRBreakoutAnalyzer
 
 
 def load_env_file():
