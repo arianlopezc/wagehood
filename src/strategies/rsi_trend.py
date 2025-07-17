@@ -183,21 +183,39 @@ class RSITrendFollowing(TradingStrategy):
             current_trend = trends[i]
 
             # Check for trend-following signals
+            trend_signal = None
             if current_trend == "uptrend":
-                signal = self._check_uptrend_signal_optimized(data, rsi_values, i)
+                trend_signal = self._check_uptrend_signal_optimized(data, rsi_values, i)
             elif current_trend == "downtrend":
-                signal = self._check_downtrend_signal_optimized(data, rsi_values, i)
-            else:
-                signal = None
-
-            if signal:
-                signals.append(signal)
+                trend_signal = self._check_downtrend_signal_optimized(data, rsi_values, i)
 
             # Check divergence if enabled
+            div_signal = None
             if self.parameters["divergence_detection"]:
                 div_signal = self._check_divergence_signal_optimized(
                     data, rsi_values, i
                 )
+
+            # Resolve conflicts when both signals exist at same timestamp
+            if trend_signal and div_signal:
+                # If signals are opposite, choose the one with higher confidence
+                if trend_signal["signal_type"] != div_signal["signal_type"]:
+                    if trend_signal["confidence"] >= div_signal["confidence"]:
+                        signals.append(trend_signal)
+                        logger.debug(f"Conflict resolved: chose trend signal over divergence at index {i}")
+                    else:
+                        signals.append(div_signal)
+                        logger.debug(f"Conflict resolved: chose divergence signal over trend at index {i}")
+                else:
+                    # Same signal type - merge and use higher confidence
+                    merged_signal = trend_signal.copy()
+                    merged_signal["confidence"] = max(trend_signal["confidence"], div_signal["confidence"])
+                    merged_signal["metadata"]["signal_name"] = "RSI Trend + Divergence"
+                    signals.append(merged_signal)
+            else:
+                # No conflict - add whichever signal exists
+                if trend_signal:
+                    signals.append(trend_signal)
                 if div_signal:
                     signals.append(div_signal)
 
