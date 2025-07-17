@@ -1,0 +1,1 @@
+"""Wagehood CLI module."""

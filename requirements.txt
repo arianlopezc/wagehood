@@ -1,0 +1,21 @@
+# Wagehood Requirements
+
+# Core dependencies
+alpaca-trade-api>=3.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+pandas-market-calendars>=4.3.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+python-dotenv>=1.0.0
+
+# Technical Analysis
+ta-lib>=0.5.1
+
+# CLI
+click>=8.1.0
+
+# Data processing
+requests>=2.32.0
+websocket-client>=1.8.0
+psutil>=5.9.0
