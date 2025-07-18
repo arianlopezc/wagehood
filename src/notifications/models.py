@@ -143,6 +143,9 @@ CHANNEL_ROUTING = {
     # Bollinger Band Breakout - ONLY 1h signals to bollinger-band-breakout channel
     ('bollinger_breakout', '1h'): 'bollinger-band-breakout',
     
+    # Crypto Bollinger Band Breakout - ONLY 1d signals to crypto-bollinger-1d channel
+    ('bollinger_breakout_crypto', '1d'): 'crypto-bollinger-1d',
+    
     # End-of-day summary routes to eod-summary channel
     ('eod_summary', None): 'eod-summary',
     

@@ -39,6 +39,7 @@ class ChannelConfigManager:
             'support-resistance': 'DISCORD_WEBHOOK_SUPPORT_RESISTANCE',
             'rsi-trend-following': 'DISCORD_WEBHOOK_RSI_TREND',
             'bollinger-band-breakout': 'DISCORD_WEBHOOK_BOLLINGER',
+            'crypto-bollinger-1d': 'DISCORD_WEBHOOK_CRYPTO_BOLLINGER_1D',
             'eod-summary': 'DISCORD_WEBHOOK_EOD_SUMMARY'
         }
         

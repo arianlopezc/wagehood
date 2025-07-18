@@ -439,6 +439,7 @@ class TestNotificationWorker:
                 'DISCORD_WEBHOOK_SUPPORT_RESISTANCE': 'https://discord.com/api/webhooks/sr',
                 'DISCORD_WEBHOOK_RSI_TREND': 'https://discord.com/api/webhooks/rsi',
                 'DISCORD_WEBHOOK_BOLLINGER': 'https://discord.com/api/webhooks/bollinger',
+                'DISCORD_WEBHOOK_CRYPTO_BOLLINGER_1D': 'https://discord.com/api/webhooks/crypto-bollinger',
                 'DISCORD_WEBHOOK_EOD_SUMMARY': 'https://discord.com/api/webhooks/eod'
             }
             
@@ -581,6 +582,7 @@ async def test_full_system_integration():
             'DISCORD_WEBHOOK_SUPPORT_RESISTANCE': 'https://discord.com/api/webhooks/sr',
             'DISCORD_WEBHOOK_RSI_TREND': 'https://discord.com/api/webhooks/rsi',
             'DISCORD_WEBHOOK_BOLLINGER': 'https://discord.com/api/webhooks/bollinger',
+            'DISCORD_WEBHOOK_CRYPTO_BOLLINGER_1D': 'https://discord.com/api/webhooks/crypto-bollinger',
             'DISCORD_WEBHOOK_EOD_SUMMARY': 'https://discord.com/api/webhooks/eod'
         }
         

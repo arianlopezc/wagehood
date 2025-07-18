@@ -26,6 +26,7 @@ from src.utils.timezone_utils import utc_now
 from src.data.providers.alpaca_provider import AlpacaProvider
 from src.strategies.macd_rsi_analyzer import MACDRSIAnalyzer
 from src.strategies.sr_breakout_analyzer import SRBreakoutAnalyzer
+from src.strategies.bollinger_breakout_analyzer import BollingerBreakoutAnalyzer
 from src.utils.data_requirements import DataRequirementsCalculator
 # No market calendar needed for crypto
 from src.notifications.models import NotificationMessage
@@ -50,9 +51,10 @@ class RealTime1DAnalyzer:
         """Initialize the analyzer with required components."""
         self.alpaca_provider = AlpacaProvider()
         
-        # Initialize analyzers (MACD+RSI and Support/Resistance for 1d only)
+        # Initialize analyzers (MACD+RSI, Support/Resistance, and Bollinger for 1d only)
         self.macd_rsi_analyzer = MACDRSIAnalyzer()
         self.sr_analyzer = SRBreakoutAnalyzer()
+        self.bollinger_analyzer = BollingerBreakoutAnalyzer()
         
         # No market calendar needed for 24/7 crypto markets
         
@@ -81,6 +83,7 @@ class RealTime1DAnalyzer:
         logger.info("1-Day Analysis Trigger initialized")
         logger.info(f"MACD+RSI requires: {self.data_requirements['macd_rsi']} days")
         logger.info(f"Support/Resistance requires: {self.data_requirements['sr_breakout']} days")
+        logger.info(f"Bollinger Breakout requires: {self.data_requirements['bollinger']} days")
         logger.info(f"Loaded {len(self.signal_history)} signal history entries from persistent storage")
     
     def _calculate_data_requirements(self) -> Dict[str, int]:
@@ -94,9 +97,18 @@ class RealTime1DAnalyzer:
         sr_reqs = DataRequirementsCalculator.calculate_sr_requirements({})
         sr_days = sr_reqs['recommended_minimum']  # This is in days for 1d timeframe
         
+        # Bollinger requirements for 1d timeframe
+        bollinger_params = {
+            'bb_period': 20,  # Default Bollinger period
+            'consolidation_periods': 5  # Default consolidation lookback
+        }
+        bollinger_reqs = DataRequirementsCalculator.calculate_bollinger_requirements(bollinger_params)
+        bollinger_days = bollinger_reqs['recommended_minimum']  # This is in days for 1d timeframe
+        
         return {
             'macd_rsi': macd_rsi_days,
-            'sr_breakout': sr_days
+            'sr_breakout': sr_days,
+            'bollinger': bollinger_days
         }
     
     def _load_signal_history(self) -> Dict[Tuple[str, str], Dict[str, str]]:
@@ -187,12 +199,13 @@ class RealTime1DAnalyzer:
                     result['symbol'], 
                     result['current_price'], 
                     result['macd_rsi_signals'], 
-                    result['sr_signals'], 
+                    result['sr_signals'],
+                    result.get('bollinger_signals', []),
                     result['session_type']
                 )
         
         # Summary
-        total_signals = sum(len(r['macd_rsi_signals']) + len(r['sr_signals']) for r in successful_results)
+        total_signals = sum(len(r['macd_rsi_signals']) + len(r['sr_signals']) + len(r.get('bollinger_signals', [])) for r in successful_results)
         logger.info(f"📈 Analysis complete: {total_signals} signals generated across {len(successful_results)} symbols")
         
         # Close Discord sender if initialized
@@ -211,13 +224,14 @@ class RealTime1DAnalyzer:
                 logger.warning(f"❌ Could not get current price for {symbol}")
                 return None
             
-            # Run both strategies in parallel
+            # Run all three strategies in parallel
             macd_rsi_task = self._run_macd_rsi_analysis(symbol, current_price, trigger_time)
             sr_task = self._run_sr_analysis(symbol, current_price, trigger_time)
+            bollinger_task = self._run_bollinger_analysis(symbol, current_price, trigger_time)
             
-            # Wait for both analyses to complete
-            macd_rsi_signals, sr_signals = await asyncio.gather(
-                macd_rsi_task, sr_task, return_exceptions=True
+            # Wait for all analyses to complete
+            macd_rsi_signals, sr_signals, bollinger_signals = await asyncio.gather(
+                macd_rsi_task, sr_task, bollinger_task, return_exceptions=True
             )
             
             # Handle exceptions from strategy analyses
@@ -228,12 +242,17 @@ class RealTime1DAnalyzer:
             if isinstance(sr_signals, Exception):
                 logger.error(f"Support/Resistance analysis failed for {symbol}: {sr_signals}")
                 sr_signals = []
+                
+            if isinstance(bollinger_signals, Exception):
+                logger.error(f"Bollinger analysis failed for {symbol}: {bollinger_signals}")
+                bollinger_signals = []
             
             return {
                 'symbol': symbol,
                 'current_price': current_price,
                 'macd_rsi_signals': macd_rsi_signals,
                 'sr_signals': sr_signals,
+                'bollinger_signals': bollinger_signals,
                 'session_type': session_type
             }
             
@@ -349,7 +368,49 @@ class RealTime1DAnalyzer:
             logger.error(f"Error in Support/Resistance analysis for {symbol}: {e}")
             return []
     
-    async def _log_results(self, symbol: str, current_price: float, macd_rsi_signals: List, sr_signals: List, session_type: str):
+    async def _run_bollinger_analysis(self, symbol: str, current_price: float, trigger_time: datetime) -> List[Dict[str, Any]]:
+        """Run Bollinger Breakout analysis with exact data requirements."""
+        try:
+            # Calculate start date using actual data requirements
+            periods_needed = self.data_requirements['bollinger']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = trigger_time - timedelta(days=calendar_days_needed)
+            
+            # Get historical data
+            try:
+                signals = await self.bollinger_analyzer.analyze_symbol(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=trigger_time,
+                    timeframe='1d'
+                )
+            except Exception as e:
+                logger.error(f"Bollinger analyzer failed for {symbol}: {e}")
+                return []
+            
+            # Filter for signals at the current moment (most recent day)
+            current_signals = []
+            for signal in signals:
+                try:
+                    signal_time = signal.get('timestamp')
+                    if signal_time and isinstance(signal_time, datetime):
+                        # Check if signal is from today or yesterday (for daily timeframe)
+                        days_diff = (trigger_time.date() - signal_time.date()).days
+                        if days_diff <= 1:  # Today or yesterday
+                            current_signals.append(signal)
+                except Exception as e:
+                    logger.warning(f"Error processing Bollinger signal for {symbol}: {e}")
+                    continue
+            
+            return current_signals
+            
+        except Exception as e:
+            logger.error(f"Error in Bollinger analysis for {symbol}: {e}")
+            return []
+    
+    async def _log_results(self, symbol: str, current_price: float, macd_rsi_signals: List, sr_signals: List, bollinger_signals: List, session_type: str):
         """Log analysis results in the same format as realtime system and send notifications."""
         
         # Session indicator for daily timeframe
@@ -396,6 +457,24 @@ class RealTime1DAnalyzer:
                 )
         else:
             logger.info(f"⚪ {symbol} SR_BREAKOUT 1d: No signals {session_indicator}")
+            
+        # Log and notify Bollinger signals
+        if bollinger_signals:
+            for signal in bollinger_signals:
+                signal_type = signal.get('signal_type', 'UNKNOWN')
+                confidence = signal.get('confidence', 0)
+                price = signal.get('price', current_price)
+                
+                emoji = "🟢" if signal_type == "BUY" else "🔴" if signal_type == "SELL" else "⚪"
+                logger.info(f"{emoji} {symbol} BOLLINGER_BREAKOUT 1d: {signal_type} at ${price:.2f} (confidence: {confidence * 100:.1f}%) {session_indicator}")
+                
+                # Send notification if conditions are met
+                # Use special strategy name for crypto Bollinger to route to correct channel
+                await self._send_notification_if_needed(
+                    symbol, 'bollinger_breakout_crypto', signal_type, price, confidence, session_type
+                )
+        else:
+            logger.info(f"⚪ {symbol} BOLLINGER_BREAKOUT 1d: No signals {session_indicator}")
     
     async def _send_notification_if_needed(self, symbol: str, strategy: str, signal_type: str, 
                                          price: float, confidence: float, session_type: str):
@@ -438,9 +517,14 @@ class RealTime1DAnalyzer:
                     'closed': '🔒'
                 }.get(session_type, '❓')
                 
+                # Format strategy name nicely
+                strategy_display = strategy.replace('_', ' ').title()
+                if strategy == 'bollinger_breakout_crypto':
+                    strategy_display = "Bollinger Band Breakout"
+                    
                 content = (
                     f"{emoji} **🪙 CRYPTO: {symbol}** {signal_type} Signal\n"
-                    f"📈 Strategy: {strategy.replace('_', ' ').title()}\n"
+                    f"📈 Strategy: {strategy_display}\n"
                     f"💰 Price: ${price:.2f}\n"
                     f"📊 Confidence: {confidence:.1%}\n"
                     f"⏰ Market: 24/7 🌐"
