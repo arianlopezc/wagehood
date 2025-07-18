@@ -30,7 +30,7 @@ from src.monitoring.health_tracker import HealthTracker
 import json
 
 # Configuration
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = 60
 SCRIPT_NAME = "trigger_1d_analysis.py"
 LOCK_FILE = Path.home() / '.wagehood' / 'cron_1d.lock'
 PID_FILE = Path.home() / '.wagehood' / 'cron_1d.pid'
@@ -220,22 +220,19 @@ class CronJobManager:
                     # Kill the stuck process
                     killed = self.kill_stuck_process(process.pid)
                     
-                    # Record timeout and check if we should alert
-                    should_alert = self._record_timeout()
+                    # Record timeout
+                    self._record_timeout()
                     
-                    # Send infrastructure alert only if 2+ consecutive timeouts
-                    if should_alert:
-                        import asyncio
-                        asyncio.run(self.send_infrastructure_alert(
-                            f"⚠️ REPEATED TIMEOUTS: 1-day analysis has timed out {self.timeout_tracking['consecutive_timeouts']} times in a row.\n\n"
-                            f"Latest timeout details:\n"
-                            f"• Process exceeded {TIMEOUT_SECONDS}s timeout\n"
-                            f"• PID: {process.pid} {'(terminated)' if killed else '(failed to terminate)'}\n"
-                            f"• Elapsed time: {elapsed:.1f}s\n\n"
-                            f"This may indicate a persistent issue that needs investigation."
-                        ))
-                    else:
-                        logger.info("Single timeout occurred - not alerting yet")
+                    # Send infrastructure alert immediately
+                    import asyncio
+                    asyncio.run(self.send_infrastructure_alert(
+                        f"⚠️ TIMEOUT: 1-day analysis exceeded {TIMEOUT_SECONDS}s timeout\n\n"
+                        f"Timeout details:\n"
+                        f"• Process exceeded {TIMEOUT_SECONDS}s timeout\n"
+                        f"• PID: {process.pid} {'(terminated)' if killed else '(failed to terminate)'}\n"
+                        f"• Elapsed time: {elapsed:.1f}s\n\n"
+                        f"This indicates a performance issue that needs investigation."
+                    ))
                     
                     self.remove_lock()
                     return False
@@ -303,8 +300,8 @@ class CronJobManager:
         
         logger.warning(f"Timeout recorded - consecutive count: {self.timeout_tracking['consecutive_timeouts']}")
         
-        # Check if we should send alert
-        return self.timeout_tracking['consecutive_timeouts'] >= 2
+        # No longer checking for multiple timeouts
+        return True
     
     def _reset_timeout_tracking(self):
         """Reset timeout tracking after successful run."""
