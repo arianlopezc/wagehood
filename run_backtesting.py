@@ -96,13 +96,23 @@ class BacktestingRunner:
             logger.info(f"Analyzing {symbol} with {strategy} strategy...")
             logger.info("Fetching market data and calculating indicators...")
             
-            signals = await analyzer.analyze_symbol(
+            analysis_result = await analyzer.analyze_symbol(
                 symbol=symbol,
                 start_date=start_dt,
                 end_date=end_dt,
                 timeframe=timeframe,
                 strategy_params=strategy_params
             )
+            
+            # Extract signals from result
+            if isinstance(analysis_result, dict):
+                signals = analysis_result.get('signals', [])
+                # Store any additional metrics if available
+                analysis_metrics = analysis_result.get('metrics', {})
+            else:
+                # For backward compatibility, assume it's a list of signals
+                signals = analysis_result
+                analysis_metrics = {}
             
             # Log results
             logger.info(f"Analysis completed. Found {len(signals)} signals.")

@@ -140,7 +140,16 @@ class BollingerBreakoutAnalyzer:
         if not symbol or not isinstance(symbol, str):
             return {"valid": False, "error": "Symbol must be a non-empty string"}
 
-        if not symbol.isalpha() or len(symbol) < 1 or len(symbol) > 10:
+        # Allow crypto symbols with '/' like BTC/USD
+        is_crypto = '/' in symbol
+        if is_crypto:
+            parts = symbol.split('/')
+            if len(parts) != 2 or not all(part.isalpha() for part in parts):
+                return {
+                    "valid": False,
+                    "error": "Crypto symbols must be in format BASE/QUOTE (e.g., BTC/USD)",
+                }
+        elif not symbol.isalpha() or len(symbol) < 1 or len(symbol) > 10:
             return {
                 "valid": False,
                 "error": "Symbol must be 1-10 alphabetic characters",
