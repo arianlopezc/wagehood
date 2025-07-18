@@ -186,7 +186,7 @@ python setup_cron_jobs.py setup
 # Alpaca API Configuration
 ALPACA_API_KEY=your_api_key_here
 ALPACA_SECRET_KEY=your_secret_key_here
-ALPACA_BASE_URL=https://paper-api.alpaca.markets
+ALPACA_BASE_URL=https://api.alpaca.markets
 
 # Discord Configuration
 DISCORD_WEBHOOK_URL=your_webhook_url_here
@@ -420,8 +420,8 @@ The system uses Alpaca Markets for several key reasons:
    - Low latency
 
 3. **Future Expansion**:
-   - Same API supports paper trading
-   - Easy transition to live trading
+   - Real-time market data access
+   - Direct integration with live trading systems
    - Options data available
    - Crypto markets included
 
@@ -543,7 +543,7 @@ By using this software, you acknowledge that:
 1. You will not use it for live trading without proper risk management
 2. The developers are not responsible for any financial losses
 3. Signal accuracy is not guaranteed
-4. You should paper trade and backtest before any real trading
+4. You should thoroughly test and validate signals before making trading decisions
 
 ---
 

@@ -39,6 +39,11 @@ class CronJobManager:
                 "schedule": "*/10 * * * * *",  # Every 10 seconds (if supported by cron)
                 "description": "1-day analysis trigger (every 10 seconds)"
             },
+            "1d_crypto": {
+                "script": self.project_root / "cron_wrapper_1d_crypto.py", 
+                "schedule": "* * * * *",  # Every minute
+                "description": "1-day crypto analysis trigger (every minute, 24/7)"
+            },
             "watchdog": {
                 "script": self.project_root / "watchdog.py",
                 "schedule": "*/5 * * * *",  # Every 5 minutes
@@ -68,8 +73,10 @@ class CronJobManager:
                 # Skip wagehood-related lines
                 if ('cron_wrapper_1h.py' in line or 
                     'cron_wrapper_1d.py' in line or
+                    'cron_wrapper_1d_crypto.py' in line or
                     'trigger_1h_analysis.py' in line or
                     'trigger_1d_analysis.py' in line or
+                    'trigger_1d_crypto_analysis.py' in line or
                     'watchdog.py' in line):
                     logger.info(f"Removing existing job: {line.strip()}")
                     continue

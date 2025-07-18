@@ -140,11 +140,29 @@ class SRBreakoutAnalyzer:
         if not symbol or not isinstance(symbol, str):
             return {"valid": False, "error": "Symbol must be a non-empty string"}
 
-        if not symbol.isalpha() or len(symbol) < 1 or len(symbol) > 10:
+        # Allow alphanumeric and '/' for crypto symbols (e.g., BTC/USD)
+        if len(symbol) < 1 or len(symbol) > 10:
             return {
                 "valid": False,
-                "error": "Symbol must be 1-10 alphabetic characters",
+                "error": "Symbol must be 1-10 characters",
             }
+        
+        # Check if it's a valid stock symbol (alphabetic) or crypto symbol (contains '/')
+        is_crypto = '/' in symbol
+        if not is_crypto and not symbol.isalpha():
+            return {
+                "valid": False,
+                "error": "Stock symbols must be alphabetic characters only",
+            }
+        
+        if is_crypto:
+            # Validate crypto symbol format (e.g., BTC/USD)
+            parts = symbol.split('/')
+            if len(parts) != 2 or not all(part.isalpha() for part in parts):
+                return {
+                    "valid": False,
+                    "error": "Crypto symbols must be in format BASE/QUOTE (e.g., BTC/USD)",
+                }
 
         # Validate dates
         if not isinstance(start_date, datetime) or not isinstance(end_date, datetime):

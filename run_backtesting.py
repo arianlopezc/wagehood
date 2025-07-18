@@ -181,8 +181,16 @@ class BacktestingRunner:
         # Validate symbol
         if not symbol or not isinstance(symbol, str):
             raise ValueError("Symbol must be a non-empty string")
-        if not symbol.isalpha() or len(symbol) > 10:
-            raise ValueError(f"Invalid symbol: {symbol}. Must be 1-10 letters only")
+        
+        # Allow crypto symbols with '/' like BTC/USD
+        is_crypto = '/' in symbol
+        if not is_crypto and (not symbol.isalpha() or len(symbol) > 10):
+            raise ValueError(f"Invalid symbol: {symbol}. Stock symbols must be 1-10 letters only")
+        
+        if is_crypto:
+            parts = symbol.split('/')
+            if len(parts) != 2 or not all(part.isalpha() for part in parts):
+                raise ValueError(f"Invalid crypto symbol: {symbol}. Must be in format BASE/QUOTE (e.g., BTC/USD)")
         
         # Validate strategy
         valid_strategies = list(STRATEGY_ANALYZER_MAP.keys())

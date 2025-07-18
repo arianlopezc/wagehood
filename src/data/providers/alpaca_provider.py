@@ -272,22 +272,43 @@ class AlpacaProvider(DataProvider):
         # Log the exact API call parameters
         logger.info(f"Alpaca API call: symbol={symbol}, timeframe={timeframe}, start={start_str}, end={end_str}, limit={limit or 1000}")
         
+        # Check if this is a crypto symbol (contains "/" like BTC/USD)
+        is_crypto = '/' in symbol
+        
         if timeframe == '1d':
-            bars = self.rest_client.get_bars(
-                symbol,
-                tradeapi.TimeFrame.Day,
-                start=start_str,
-                end=end_str,
-                limit=limit or 1000
-            )
+            if is_crypto:
+                bars = self.rest_client.get_crypto_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Day,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
+            else:
+                bars = self.rest_client.get_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Day,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
         elif timeframe == '1h':
-            bars = self.rest_client.get_bars(
-                symbol,
-                tradeapi.TimeFrame.Hour,
-                start=start_str,
-                end=end_str,
-                limit=limit or 1000
-            )
+            if is_crypto:
+                bars = self.rest_client.get_crypto_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Hour,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
+            else:
+                bars = self.rest_client.get_bars(
+                    symbol,
+                    tradeapi.TimeFrame.Hour,
+                    start=start_str,
+                    end=end_str,
+                    limit=limit or 1000
+                )
         else:
             raise ValueError(f"Unsupported timeframe: {timeframe}")
         

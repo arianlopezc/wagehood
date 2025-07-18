@@ -438,7 +438,7 @@ All commands respect these environment variables:
 # Alpaca API (required)
 export ALPACA_API_KEY="your-key"
 export ALPACA_SECRET_KEY="your-secret"
-export ALPACA_BASE_URL="https://paper-api.alpaca.markets"
+export ALPACA_BASE_URL="https://api.alpaca.markets"
 
 # Discord (required for notifications)
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
