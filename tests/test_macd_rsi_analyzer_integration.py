@@ -205,7 +205,7 @@ class TestMACDRSIAnalyzerIntegration:
                 end_date=end_date,
                 timeframe="1d"
             )
-        assert "Symbol must be 1-10 alphabetic characters" in str(excinfo.value)
+        assert "Stock symbols must be alphabetic characters only" in str(excinfo.value)
         
         # Test invalid timeframe
         with pytest.raises(ValueError) as excinfo:

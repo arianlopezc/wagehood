@@ -110,15 +110,16 @@ This strategy identifies when price breaks through significant support or resist
 - **BUY Signal**: Price breaks above resistance with volume > 1.1x average (relaxed from 1.5x)
 - **SELL Signal**: Price breaks below support with volume > 1.1x average (relaxed from 1.5x)
 
-**Additional Strategies Available:**
-- **RSI Trend Following**: Captures trends with wider RSI ranges (30-55 for bullish, 45-70 for bearish)
-- **Bollinger Band Breakout**: Detects volatility breakouts with relaxed consolidation requirements
-
 **Parameters:**
 - Lookback Period: 60 days for daily, 60 bars for hourly
 - Level Identification: Local minima/maxima with at least 2% separation
 - Volume Threshold: 1.2x average volume
 - Breakout Confirmation: Close price beyond level
+
+
+**Additional Strategies Available:**
+- **RSI Trend Following**: Captures trends with wider RSI ranges (30-55 for bullish, 45-70 for bearish)
+- **Bollinger Band Breakout**: Detects volatility breakouts with relaxed consolidation requirements
 
 ### Mathematical Foundations
 
@@ -197,6 +198,10 @@ DISCORD_HIGH_PRIORITY_WEBHOOK_URL=your_priority_webhook_url
 # System Configuration
 LOG_LEVEL=INFO
 HEALTH_CHECK_INTERVAL=300  # seconds
+
+# Trading Symbols
+SUPPORTED_SYMBOLS=AAPL,MSFT,GOOGL,AMZN,TSLA,META,NVDA
+SUPPORTED_CRYPTO_SYMBOLS=BTC/USD,ETH/USD,SOL/USD,XRP/USD
 ```
 
 ### Discord Webhook Configuration:
@@ -279,6 +284,40 @@ Displays the current state of the notification queue.
 python test_discord.py
 ```
 Sends a test message to verify Discord webhook configuration.
+
+### Backtesting Commands
+
+#### Run Backtesting
+```bash
+python run_backtesting.py <symbol> <strategy> <timeframe> <start_date> <end_date>
+```
+
+Perform historical backtesting for any supported strategy.
+
+**Supported Strategies:**
+- `macd_rsi` - MACD+RSI Combined Strategy
+- `rsi_trend` - RSI Trend Following
+- `bollinger_breakout` - Bollinger Band Breakout
+- `sr_breakout` - Support/Resistance Breakout
+
+**Examples:**
+```bash
+# Stock backtesting
+python run_backtesting.py AAPL macd_rsi 1d 2024-01-01 2024-12-31
+python run_backtesting.py TSLA rsi_trend 1h 2024-11-01 2024-12-31
+
+# Crypto backtesting (requires BASE/QUOTE format)
+python run_backtesting.py BTC/USD macd_rsi 1d 2024-01-01 2024-12-31
+python run_backtesting.py ETH/USD bollinger_breakout 1d 2024-01-01 2024-12-31
+python run_backtesting.py SOL/USD rsi_trend 1d 2024-01-01 2024-12-31
+```
+
+**Output includes:**
+- Total return percentage
+- Number of trades and win rate
+- Average return per trade
+- Best and worst trades
+- Complete signal list with timestamps and confidence
 
 ### Utility Commands
 
