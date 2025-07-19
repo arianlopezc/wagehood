@@ -129,14 +129,16 @@ class DataRequirementsCalculator:
         """
         lookback_periods = parameters.get("lookback_periods", 50)
         consolidation_periods = parameters.get("consolidation_periods", 10)
+        rolling_window_periods = parameters.get("rolling_window_periods", 100)
         
-        # S/R needs lookback periods for level identification
-        technical_minimum = lookback_periods + consolidation_periods
+        # S/R needs rolling window periods for consistent level identification
+        technical_minimum = rolling_window_periods + consolidation_periods
         total_minimum = technical_minimum + cls.TALIB_BUFFER + cls.STRATEGY_BUFFER
         
         return {
             "lookback_minimum": lookback_periods,
             "consolidation_minimum": consolidation_periods,
+            "rolling_window_minimum": rolling_window_periods,
             "technical_minimum": technical_minimum,
             "total_minimum": total_minimum,
             "recommended_minimum": total_minimum + 20

@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 # Import fast parallel processor
 from src.jobs.fast_parallel_processor import FastParallelProcessor
 
+# Import analyzers and data requirements
+from src.strategies.macd_rsi_analyzer import MACDRSIAnalyzer
+from src.strategies.sr_breakout_analyzer import SRBreakoutAnalyzer
+from src.utils.data_requirements import DataRequirementsCalculator
+
 
 @dataclass
 class SignalSummary:
@@ -67,10 +72,17 @@ class SummaryGenerator:
         """Initialize the summary generator with fast parallel processing."""
         self.strategies = ['macd_rsi', 'sr_breakout']
         
-        # Use fast parallel processor for better performance
-        self.processor = FastParallelProcessor(
-            max_concurrent=10  # Process up to 10 symbols simultaneously
-        )
+        # Initialize analyzers (same as trigger jobs)
+        self.macd_rsi_analyzer = MACDRSIAnalyzer()
+        self.sr_analyzer = SRBreakoutAnalyzer()
+        
+        # Calculate exact data requirements for each strategy (same as trigger jobs)
+        self.data_requirements = {
+            'macd_rsi': DataRequirementsCalculator.calculate_macd_rsi_requirements({})['recommended_minimum'],
+            'sr_breakout': DataRequirementsCalculator.calculate_sr_requirements({})['recommended_minimum']
+        }
+        
+        logger.info(f"Data requirements - MACD+RSI: {self.data_requirements['macd_rsi']} periods, SR: {self.data_requirements['sr_breakout']} periods")
     
     async def generate_summary(
         self,
@@ -96,29 +108,32 @@ class SummaryGenerator:
         
         logger.info(f"Generating today's summary for {len(symbols)} symbols")
         
-        # Calculate date range - end date is today (UTC), start date provides enough data
+        # End date is now (same as trigger jobs)
         end_date = utc_now()
-        # Use 180 days to ensure both strategies have sufficient data
-        start_date = end_date - timedelta(days=180)
         
-        # Always use parallel processing for better performance
-        logger.info(f"Processing {len(symbols)} symbols in parallel")
+        # Process all symbols in parallel with strategy-specific data windows
+        logger.info(f"Processing {len(symbols)} symbols with strategy-specific data requirements")
         
-        # Process all symbols in parallel
-        symbol_results = await self.processor.process_symbols(
-            symbols=symbols,
-            start_date=start_date,
-            end_date=end_date,
-            strategies=self.strategies
-        )
+        # Create tasks for parallel processing
+        tasks = []
+        for symbol in symbols:
+            task = self._analyze_symbol_with_exact_data(symbol, end_date)
+            tasks.append(task)
         
-        # Convert parallel results to SignalSummary objects
+        # Execute all analyses in parallel
+        symbol_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Convert results to SignalSummary objects
         today = utc_now().date()
         
-        for symbol, analysis_result in symbol_results.items():
-            symbol_summary = self._create_summary_from_parallel_result(
-                symbol, analysis_result, today
-            )
+        for symbol, analysis_result in zip(symbols, symbol_results):
+            if isinstance(analysis_result, Exception):
+                symbol_summary = SignalSummary(symbol=symbol)
+                symbol_summary.errors.append(str(analysis_result))
+            else:
+                symbol_summary = self._create_summary_from_result(
+                    symbol, analysis_result, today
+                )
             
             result.signal_summaries.append(symbol_summary)
             result.symbols_processed += 1
@@ -139,11 +154,114 @@ class SummaryGenerator:
         result.execution_duration_seconds = (utc_now() - start_time).total_seconds()
         
         logger.info(f"Summary generation completed in {result.execution_duration_seconds:.2f}s")
-        logger.info(f"Found {result.total_signals} today's signals across {result.symbols_with_signals} symbols")
+        logger.info(f"Found {result.total_signals} recent signals across {result.symbols_with_signals} symbols")
         
         return result
     
-    def _create_summary_from_parallel_result(
+    async def _analyze_symbol_with_exact_data(
+        self,
+        symbol: str,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Analyze a single symbol with strategy-specific data requirements.
+        Same approach as 1-day trigger job.
+        """
+        try:
+            # Run both strategies in parallel with their specific data requirements
+            macd_task = self._run_macd_rsi_analysis(symbol, end_date)
+            sr_task = self._run_sr_analysis(symbol, end_date)
+            
+            # Wait for both analyses to complete
+            macd_signals, sr_signals = await asyncio.gather(
+                macd_task, sr_task, return_exceptions=True
+            )
+            
+            # Handle exceptions
+            if isinstance(macd_signals, Exception):
+                logger.error(f"MACD+RSI analysis failed for {symbol}: {macd_signals}")
+                macd_signals = []
+            
+            if isinstance(sr_signals, Exception):
+                logger.error(f"Support/Resistance analysis failed for {symbol}: {sr_signals}")
+                sr_signals = []
+            
+            # Combine results
+            all_signals = []
+            
+            # Add strategy name to signals
+            for signal in macd_signals:
+                signal['strategy'] = 'macd_rsi'
+                all_signals.append(signal)
+            
+            for signal in sr_signals:
+                signal['strategy'] = 'sr_breakout'
+                all_signals.append(signal)
+            
+            return {
+                'symbol': symbol,
+                'signals': all_signals,
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing {symbol}: {e}")
+            return {
+                'symbol': symbol,
+                'signals': [],
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def _run_macd_rsi_analysis(self, symbol: str, end_date: datetime) -> List[Dict[str, Any]]:
+        """Run MACD+RSI analysis with exact data requirements (same as trigger job)."""
+        try:
+            # Calculate start date using actual data requirements
+            periods_needed = self.data_requirements['macd_rsi']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = end_date - timedelta(days=calendar_days_needed)
+            
+            # Run analysis
+            signals = await self.macd_rsi_analyzer.analyze_symbol(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                timeframe='1d'
+            )
+            
+            return signals or []
+            
+        except Exception as e:
+            logger.error(f"MACD+RSI analysis failed for {symbol}: {e}")
+            raise
+    
+    async def _run_sr_analysis(self, symbol: str, end_date: datetime) -> List[Dict[str, Any]]:
+        """Run Support/Resistance analysis with exact data requirements (same as trigger job)."""
+        try:
+            # Calculate start date using actual data requirements
+            periods_needed = self.data_requirements['sr_breakout']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = end_date - timedelta(days=calendar_days_needed)
+            
+            # Run analysis
+            signals = await self.sr_analyzer.analyze_symbol(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                timeframe='1d'
+            )
+            
+            return signals or []
+            
+        except Exception as e:
+            logger.error(f"Support/Resistance analysis failed for {symbol}: {e}")
+            raise
+    
+    def _create_summary_from_result(
         self,
         symbol: str,
         analysis_result: Dict[str, Any],
@@ -161,7 +279,7 @@ class SummaryGenerator:
         # Get all signals from the result
         all_signals = analysis_result.get('signals', [])
         
-        # Filter for today's signals only
+        # Filter for today's signals only (same approach as trigger jobs)
         todays_signals = []
         for signal in all_signals:
             signal_date = signal.get('timestamp')
@@ -176,8 +294,10 @@ class SummaryGenerator:
                     except:
                         continue
                 
-                # Only include today's signals
-                if signal_date == today:
+                # Check if signal is from today or yesterday (for daily timeframe)
+                # This matches the trigger job logic which uses days_diff <= 1
+                days_diff = (today - signal_date).days
+                if days_diff <= 1:  # Today or yesterday
                     todays_signals.append(signal)
         
         # Process today's signals
@@ -300,8 +420,8 @@ if __name__ == "__main__":
     result = asyncio.run(main(symbols=symbols, scheduled=args.scheduled))
     
     # Print results
-    print(f"\nToday's Signal Summary:")
-    print(f"Generated at: {result.generated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"\nEnd-of-Day Signal Summary:")
+    print(f"Generated at: {result.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print(f"Symbols processed: {result.symbols_processed}")
     print(f"Symbols with signals: {result.symbols_with_signals}")
     print(f"Total signals: {result.total_signals} ({result.buy_signals} BUY, {result.sell_signals} SELL)")

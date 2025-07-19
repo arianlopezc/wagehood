@@ -57,6 +57,7 @@ class SupportResistanceBreakout(TradingStrategy):
             "level_strength_weight": 0.3,
             "breakout_strength_weight": 0.4,
             "false_breakout_filter": True,
+            "rolling_window_periods": 100,  # Use last 100 periods for S/R identification
         }
 
         if parameters:
@@ -103,18 +104,31 @@ class SupportResistanceBreakout(TradingStrategy):
             if self.parameters["volume_confirmation"] and len(volume_data) >= 20:
                 avg_volume = np.mean(volume_data[-20:])
 
-            # Identify support and resistance levels
-            support_levels = self._identify_support_levels(
-                close_prices, low_prices, high_prices
-            )
-            resistance_levels = self._identify_resistance_levels(
-                close_prices, low_prices, high_prices
-            )
-
-            # Check for breakout signals
-            for i in range(self.parameters["consolidation_periods"], len(close_prices)):
+            # Check for breakout signals using rolling window approach
+            rolling_window = self.parameters["rolling_window_periods"]
+            
+            # Ensure we have enough data for rolling window
+            start_idx = max(rolling_window, self.parameters["consolidation_periods"])
+            
+            for i in range(start_idx, len(close_prices)):
+                # Define the rolling window for S/R identification
+                window_start = max(0, i - rolling_window)
+                window_end = i + 1
+                
+                # Identify S/R levels using only the rolling window data
+                window_support_levels = self._identify_support_levels(
+                    close_prices[window_start:window_end],
+                    low_prices[window_start:window_end], 
+                    high_prices[window_start:window_end]
+                )
+                window_resistance_levels = self._identify_resistance_levels(
+                    close_prices[window_start:window_end],
+                    low_prices[window_start:window_end],
+                    high_prices[window_start:window_end]
+                )
+                
                 # Check resistance breakouts
-                for level_info in resistance_levels:
+                for level_info in window_resistance_levels:
                     signal = self._check_resistance_breakout(
                         data,
                         i,
@@ -128,7 +142,7 @@ class SupportResistanceBreakout(TradingStrategy):
                         signals.append(signal)
 
                 # Check support breakouts
-                for level_info in support_levels:
+                for level_info in window_support_levels:
                     signal = self._check_support_breakout(
                         data,
                         i,

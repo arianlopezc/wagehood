@@ -62,10 +62,10 @@ class RealTime1DAnalyzer:
         self.data_requirements = self._calculate_data_requirements()
         
         # Initialize deduplication tracker with persistent storage
-        # Format: {('SYMBOL', 'strategy'): {'signal_type': 'BUY', 'date': '2025-07-16'}}
+        # Format: {('SYMBOL', 'strategy'): 'BUY'}
         self.signal_history_file = Path.home() / '.wagehood' / 'signal_history_1d_crypto.json'
         self.signal_history_file.parent.mkdir(exist_ok=True)
-        self.signal_history: Dict[Tuple[str, str], Dict[str, str]] = self._load_signal_history()
+        self.signal_history: Dict[Tuple[str, str], str] = self._load_signal_history()
         
         # Initialize Discord notification sender
         self.discord_sender = None
@@ -111,7 +111,7 @@ class RealTime1DAnalyzer:
             'bollinger': bollinger_days
         }
     
-    def _load_signal_history(self) -> Dict[Tuple[str, str], Dict[str, str]]:
+    def _load_signal_history(self) -> Dict[Tuple[str, str], str]:
         """Load signal history from persistent storage."""
         if self.signal_history_file.exists():
             try:
@@ -123,16 +123,13 @@ class RealTime1DAnalyzer:
                         # Key format: "SYMBOL|strategy"
                         parts = key_str.split('|')
                         if len(parts) == 2:
-                            # Handle backward compatibility: convert old format to new format
+                            # Handle backward compatibility
                             if isinstance(value, str):
                                 # Old format: just signal type
-                                result[(parts[0], parts[1])] = {
-                                    'signal_type': value,
-                                    'date': '2025-01-01'  # Old signals get old date to ensure they don't block new ones
-                                }
-                            else:
-                                # New format: dict with signal_type and date
                                 result[(parts[0], parts[1])] = value
+                            elif isinstance(value, dict) and 'signal_type' in value:
+                                # Was dict format, extract signal_type only
+                                result[(parts[0], parts[1])] = value['signal_type']
                     return result
             except Exception as e:
                 logger.warning(f"Failed to load signal history: {e}")
@@ -144,9 +141,9 @@ class RealTime1DAnalyzer:
         try:
             # Convert tuple keys to strings for JSON serialization
             data = {}
-            for (symbol, strategy), signal_info in self.signal_history.items():
+            for (symbol, strategy), signal_type in self.signal_history.items():
                 key = f"{symbol}|{strategy}"
-                data[key] = signal_info
+                data[key] = signal_type
             
             logger.info(f"Saving {len(data)} signal history entries to {self.signal_history_file}")
             with open(self.signal_history_file, 'w') as f:
@@ -485,26 +482,19 @@ class RealTime1DAnalyzer:
         # Create key for tracking
         key = (symbol, strategy)
         
-        # Get current date for comparison
-        current_date = utc_now().date().isoformat()  # Format: '2025-07-16'
-        
         # Check deduplication conditions
-        last_signal_info = self.signal_history.get(key)
+        last_signal_type = self.signal_history.get(key)
         
         # Send notification if:
         # 1. Never sent for this symbol/strategy combination
         # 2. Signal type is different from the last one sent
-        # 3. Same signal type but different date (new occurrence)
         should_send = False
-        if last_signal_info is None:
+        if last_signal_type is None:
             should_send = True
             logger.info(f"📤 Sending notification for {symbol} {strategy} {signal_type} (first time)")
-        elif last_signal_info['signal_type'] != signal_type:
+        elif last_signal_type != signal_type:
             should_send = True
-            logger.info(f"📤 Sending notification for {symbol} {strategy} {signal_type} (different signal: {last_signal_info['signal_type']} -> {signal_type})")
-        elif last_signal_info['date'] != current_date:
-            should_send = True
-            logger.info(f"📤 Sending notification for {symbol} {strategy} {signal_type} (new date: {last_signal_info['date']} -> {current_date})")
+            logger.info(f"📤 Sending notification for {symbol} {strategy} {signal_type} (signal changed: {last_signal_type} -> {signal_type})")
         
         if should_send:
             try:
@@ -543,10 +533,7 @@ class RealTime1DAnalyzer:
                 
                 if success:
                     # Update signal history and persist
-                    self.signal_history[key] = {
-                        'signal_type': signal_type,
-                        'date': current_date
-                    }
+                    self.signal_history[key] = signal_type
                     self._save_signal_history()
                     logger.info(f"✅ Notification sent for {symbol} {strategy} {signal_type}")
                 else:
@@ -557,7 +544,7 @@ class RealTime1DAnalyzer:
                 # Don't crash - continue with other notifications
         else:
             # Notification skipped due to deduplication
-            logger.info(f"⏭️ Skipping notification for {symbol} {strategy} {signal_type} (same signal on same date: {current_date})")
+            logger.info(f"⏭️ Skipping notification for {symbol} {strategy} {signal_type} (same signal type)")
 
 async def main():
     """Main function to run the 1-day analysis."""
