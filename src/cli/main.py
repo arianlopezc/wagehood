@@ -45,23 +45,33 @@ def configure(config_manager: ConfigManager):
     api_key = click.prompt("Enter your Alpaca API key", hide_input=True)
     secret_key = click.prompt("Enter your Alpaca secret key", hide_input=True)
     
-    # Get symbols
+    # Get stock symbols
     symbols_input = click.prompt(
-        "Enter supported symbols (comma-separated)",
+        "Enter supported stock symbols (comma-separated)",
         default="AAPL,GOOGL,MSFT,AMZN,TSLA"
     )
     symbols = [s.strip().upper() for s in symbols_input.split(',') if s.strip()]
+    
+    # Get crypto symbols
+    crypto_symbols_input = click.prompt(
+        "Enter supported crypto symbols (comma-separated, e.g., BTC/USD,ETH/USD)",
+        default="BTC/USD,ETH/USD,SOL/USD,XRP/USD"
+    )
+    crypto_symbols = [s.strip().upper() for s in crypto_symbols_input.split(',') if s.strip()]
     
     # Save configuration
     config_manager.update({
         'api_key': api_key,
         'secret_key': secret_key,
-        'symbols': symbols
+        'symbols': symbols,
+        'crypto_symbols': crypto_symbols
     })
     
     click.echo(f"\n✅ Configuration saved successfully!")
-    click.echo(f"📊 Tracking {len(symbols)} symbols: {', '.join(symbols[:5])}" + 
+    click.echo(f"📊 Tracking {len(symbols)} stock symbols: {', '.join(symbols[:5])}" + 
                (" ..." if len(symbols) > 5 else ""))
+    click.echo(f"🪙 Tracking {len(crypto_symbols)} crypto symbols: {', '.join(crypto_symbols[:5])}" + 
+               (" ..." if len(crypto_symbols) > 5 else ""))
 
 
 @cli.command()
@@ -202,47 +212,79 @@ def symbols():
 def list_symbols(config_manager: ConfigManager):
     """List all tracked symbols."""
     symbols = config_manager.get('symbols', [])
-    if not symbols:
+    crypto_symbols = config_manager.get('crypto_symbols', [])
+    
+    if not symbols and not crypto_symbols:
         click.echo("📭 No symbols configured.")
         return
     
-    click.echo(f"📊 Tracking {len(symbols)} symbols:")
-    for i, symbol in enumerate(symbols, 1):
-        click.echo(f"  {i}. {symbol}")
+    if symbols:
+        click.echo(f"📊 Tracking {len(symbols)} stock symbols:")
+        for i, symbol in enumerate(symbols, 1):
+            click.echo(f"  {i}. {symbol}")
+    
+    if crypto_symbols:
+        click.echo(f"\n🪙 Tracking {len(crypto_symbols)} crypto symbols:")
+        for i, symbol in enumerate(crypto_symbols, 1):
+            click.echo(f"  {i}. {symbol}")
 
 
 @symbols.command('add')
 @click.argument('symbol')
+@click.option('--crypto', is_flag=True, help='Add as crypto symbol (e.g., BTC/USD)')
 @click.pass_obj
-def add_symbol(config_manager: ConfigManager, symbol: str):
+def add_symbol(config_manager: ConfigManager, symbol: str, crypto: bool):
     """Add a new symbol to track."""
-    symbols = config_manager.get('symbols', [])
     symbol = symbol.upper()
     
+    if crypto:
+        symbols = config_manager.get('crypto_symbols', [])
+        symbol_type = "crypto"
+        emoji = "🪙"
+    else:
+        symbols = config_manager.get('symbols', [])
+        symbol_type = "stock"
+        emoji = "📊"
+    
     if symbol in symbols:
-        click.echo(f"⚠️  Symbol {symbol} is already being tracked.")
+        click.echo(f"⚠️  {emoji} {symbol} is already being tracked as a {symbol_type} symbol.")
         return
     
     symbols.append(symbol)
-    config_manager.set('symbols', symbols)
-    click.echo(f"✅ Added {symbol} to tracked symbols.")
+    if crypto:
+        config_manager.set('crypto_symbols', symbols)
+    else:
+        config_manager.set('symbols', symbols)
+    click.echo(f"✅ {emoji} Added {symbol} to tracked {symbol_type} symbols.")
 
 
 @symbols.command('remove')
 @click.argument('symbol')
+@click.option('--crypto', is_flag=True, help='Remove from crypto symbols')
 @click.pass_obj
-def remove_symbol(config_manager: ConfigManager, symbol: str):
+def remove_symbol(config_manager: ConfigManager, symbol: str, crypto: bool):
     """Remove a symbol from tracking."""
-    symbols = config_manager.get('symbols', [])
     symbol = symbol.upper()
     
+    if crypto:
+        symbols = config_manager.get('crypto_symbols', [])
+        symbol_type = "crypto"
+        emoji = "🪙"
+    else:
+        symbols = config_manager.get('symbols', [])
+        symbol_type = "stock"
+        emoji = "📊"
+    
     if symbol not in symbols:
-        click.echo(f"⚠️  Symbol {symbol} is not being tracked.")
+        click.echo(f"⚠️  {emoji} {symbol} is not being tracked as a {symbol_type} symbol.")
         return
     
     symbols.remove(symbol)
-    config_manager.set('symbols', symbols)
-    click.echo(f"✅ Removed {symbol} from tracked symbols.")
+    if crypto:
+        config_manager.set('crypto_symbols', symbols)
+    else:
+        config_manager.set('symbols', symbols)
+    click.echo(f"✅ {emoji} Removed {symbol} from tracked {symbol_type} symbols.")
 
 
 @cli.command()

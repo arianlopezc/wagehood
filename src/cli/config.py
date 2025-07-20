@@ -62,6 +62,8 @@ class ConfigManager:
             env_vars['ALPACA_SECRET_KEY'] = config['secret_key']
         if 'symbols' in config:
             env_vars['SUPPORTED_SYMBOLS'] = ','.join(config['symbols'])
+        if 'crypto_symbols' in config:
+            env_vars['SUPPORTED_CRYPTO_SYMBOLS'] = ','.join(config['crypto_symbols'])
         
         return env_vars
     

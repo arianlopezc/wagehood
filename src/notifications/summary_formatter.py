@@ -36,29 +36,110 @@ class SummaryFormatter:
         """
         import json
         
-        # Convert to the format expected by format_eod_summary
-        signal_summaries = []
+        # Convert stock signals to the format expected by format_eod_summary
+        stock_signal_summaries = []
         for summary in result.signal_summaries:
             if summary.signal_count > 0:
-                signal_summaries.append({
+                stock_signal_summaries.append({
                     'symbol': summary.symbol,
                     'signal_count': summary.signal_count,
                     'buy_signals': summary.buy_signals,
                     'sell_signals': summary.sell_signals,
                     'avg_confidence': summary.avg_confidence,
                     'latest_signal': summary.latest_signal,
-                    'strategies': summary.strategies  # Add strategies list
+                    'strategies': summary.strategies,
+                    'is_crypto': False
                 })
         
-        # Call the existing format method
-        formatted = SummaryFormatter.format_eod_summary(
-            signal_summaries=signal_summaries,
+        # Convert crypto signals to the same format
+        crypto_signal_summaries = []
+        if hasattr(result, 'crypto_signal_summaries'):
+            for summary in result.crypto_signal_summaries:
+                if summary.signal_count > 0:
+                    crypto_signal_summaries.append({
+                        'symbol': summary.symbol,
+                        'signal_count': summary.signal_count,
+                        'buy_signals': summary.buy_signals,
+                        'sell_signals': summary.sell_signals,
+                        'avg_confidence': summary.avg_confidence,
+                        'latest_signal': summary.latest_signal,
+                        'strategies': summary.strategies,
+                        'is_crypto': True
+                    })
+        
+        # Call the enhanced format method with both stock and crypto data
+        formatted = SummaryFormatter.format_eod_summary_with_crypto(
+            stock_signal_summaries=stock_signal_summaries,
+            crypto_signal_summaries=crypto_signal_summaries,
             execution_time=result.generated_at,
-            total_symbols=result.symbols_processed,
-            total_signals=result.total_signals
+            stock_symbols_processed=result.symbols_processed,
+            stock_total_signals=result.total_signals,
+            crypto_symbols_processed=getattr(result, 'crypto_symbols_processed', 0),
+            crypto_total_signals=getattr(result, 'crypto_total_signals', 0)
         )
         
         return json.dumps(formatted)
+    
+    @staticmethod
+    def format_eod_summary_with_crypto(
+        stock_signal_summaries: List[Dict[str, Any]],
+        crypto_signal_summaries: List[Dict[str, Any]],
+        execution_time: datetime,
+        stock_symbols_processed: int,
+        stock_total_signals: int,
+        crypto_symbols_processed: int,
+        crypto_total_signals: int
+    ) -> Dict[str, Any]:
+        """
+        Format end-of-day summary with both stock and crypto signals for Discord
+        
+        Args:
+            stock_signal_summaries: List of stock signal summary dictionaries
+            crypto_signal_summaries: List of crypto signal summary dictionaries
+            execution_time: When the summary was generated
+            stock_symbols_processed: Total number of stock symbols analyzed
+            stock_total_signals: Total number of stock signals generated
+            crypto_symbols_processed: Total number of crypto symbols analyzed
+            crypto_total_signals: Total number of crypto signals generated
+            
+        Returns:
+            Dictionary with Discord message content and embeds
+        """
+        
+        # Categorize signals separately for stocks and crypto
+        stock_buy_signals, stock_sell_signals = SummaryFormatter._categorize_signals(stock_signal_summaries)
+        crypto_buy_signals, crypto_sell_signals = SummaryFormatter._categorize_signals(crypto_signal_summaries)
+        
+        # Combine all signals for top opportunities
+        all_signal_summaries = stock_signal_summaries + crypto_signal_summaries
+        
+        # Create comprehensive embed with both stock and crypto
+        embed = SummaryFormatter._create_comprehensive_embed_with_crypto(
+            execution_time, 
+            stock_symbols_processed, 
+            stock_signal_summaries, 
+            stock_total_signals,
+            stock_buy_signals, 
+            stock_sell_signals,
+            crypto_symbols_processed,
+            crypto_signal_summaries,
+            crypto_total_signals,
+            crypto_buy_signals,
+            crypto_sell_signals
+        )
+        
+        # Create friendly content summary
+        content = SummaryFormatter._create_friendly_content_with_crypto(
+            stock_buy_signals, stock_sell_signals, stock_symbols_processed,
+            crypto_buy_signals, crypto_sell_signals, crypto_symbols_processed,
+            execution_time
+        )
+        
+        return {
+            "content": content,
+            "embeds": [embed],
+            "username": "Wagehood Daily Summary"
+        }
     
     @staticmethod
     def format_eod_summary(
@@ -539,3 +620,178 @@ class SummaryFormatter:
             "embeds": [embed],
             "username": "Wagehood EOD Summary"
         }
+    
+    @staticmethod
+    def _create_comprehensive_embed_with_crypto(
+        execution_time: datetime,
+        stock_symbols_processed: int,
+        stock_signal_summaries: List[Dict[str, Any]],
+        stock_total_signals: int,
+        stock_buy_signals: List[Dict],
+        stock_sell_signals: List[Dict],
+        crypto_symbols_processed: int,
+        crypto_signal_summaries: List[Dict[str, Any]],
+        crypto_total_signals: int,
+        crypto_buy_signals: List[Dict],
+        crypto_sell_signals: List[Dict]
+    ) -> Dict[str, Any]:
+        """Create a single comprehensive embed with both stock and crypto information"""
+        
+        date_str = execution_time.strftime('%A, %B %d, %Y')
+        time_str = execution_time.strftime('%I:%M %p ET')
+        
+        # Combine totals
+        total_symbols = stock_symbols_processed + crypto_symbols_processed
+        total_signals = stock_total_signals + crypto_total_signals
+        
+        # Build description based on signals
+        if total_signals == 0:
+            description = f"I analyzed {total_symbols} symbols today ({stock_symbols_processed} stocks, {crypto_symbols_processed} crypto), but didn't find any strong trading signals. The market seems quiet! 😌"
+        else:
+            description = f"Here's what I found after analyzing {total_symbols} symbols today ({stock_symbols_processed} stocks, {crypto_symbols_processed} crypto):"
+        
+        embed = {
+            "title": f"📊 Your Daily Trading Summary",
+            "description": description,
+            "color": 0x5865F2,  # Discord blurple for a friendly look
+            "fields": [],
+            "footer": {
+                "text": f"⚠️ Not financial advice • Analysis completed at {time_str} • Next update tomorrow at 5PM ET"
+            },
+            "timestamp": execution_time.isoformat()
+        }
+        
+        # Add market overview
+        if total_signals > 0:
+            # Stock overview
+            if stock_total_signals > 0:
+                stock_symbols_with_signals = len(stock_signal_summaries)
+                embed["fields"].append({
+                    "name": "📈 Stock Market Overview",
+                    "value": f"• **{stock_symbols_with_signals}** symbols showing activity\n• **{stock_total_signals}** total signals detected\n• **{len(stock_buy_signals)}** bullish / **{len(stock_sell_signals)}** bearish",
+                    "inline": False
+                })
+            
+            # Crypto overview
+            if crypto_total_signals > 0:
+                crypto_symbols_with_signals = len(crypto_signal_summaries)
+                embed["fields"].append({
+                    "name": "🪙 Crypto Market Overview",
+                    "value": f"• **{crypto_symbols_with_signals}** symbols showing activity\n• **{crypto_total_signals}** total signals detected\n• **{len(crypto_buy_signals)}** bullish / **{len(crypto_sell_signals)}** bearish",
+                    "inline": False
+                })
+        
+        # Add top opportunities combining both stocks and crypto
+        all_signals = []
+        for signal in stock_buy_signals + stock_sell_signals:
+            signal['market_type'] = '📈'  # Stock emoji
+            all_signals.append(signal)
+        for signal in crypto_buy_signals + crypto_sell_signals:
+            signal['market_type'] = '🪙'  # Crypto emoji
+            all_signals.append(signal)
+        
+        if all_signals:
+            all_signals.sort(key=lambda x: x['confidence'], reverse=True)
+            top_signals = all_signals[:5]
+            
+            top_text = []
+            for signal in top_signals:
+                emoji = "🟢" if signal['signal_name'] == 'BUY' else "🔴"
+                market_emoji = signal['market_type']
+                symbol = signal['symbol']
+                confidence = f"{signal['confidence']:.0%}"
+                
+                # Format strategies
+                strategies = signal.get('strategies', [])
+                if strategies:
+                    strategy_names = [s.replace('_', ' ').title() for s in strategies]
+                    strategy_text = " & ".join(strategy_names)
+                else:
+                    # Fallback to single strategy field
+                    strategy_text = signal.get('strategy', 'unknown').replace('_', ' ').title()
+                
+                count = signal.get('count', 1)
+                count_text = f" ({count} signals)" if count > 1 else ""
+                
+                signal_type = signal['signal_name']
+                top_text.append(f"{market_emoji} {emoji} **{symbol} - {signal_type}** - {strategy_text} - {confidence} confidence{count_text}")
+            
+            embed["fields"].append({
+                "name": "🎯 Top Opportunities",
+                "value": "\n".join(top_text),
+                "inline": False
+            })
+        
+        # Add signal breakdown if we have many signals
+        if len(all_signals) > 5:
+            # Group by confidence
+            strong = len([s for s in all_signals if s['confidence'] >= 0.8])
+            moderate = len([s for s in all_signals if 0.6 <= s['confidence'] < 0.8])
+            
+            breakdown_text = []
+            if strong > 0:
+                breakdown_text.append(f"🔥 **{strong}** high confidence (80%+)")
+            if moderate > 0:
+                breakdown_text.append(f"⚡ **{moderate}** moderate confidence (60-79%)")
+            
+            if breakdown_text:
+                embed["fields"].append({
+                    "name": "📊 Signal Strength Distribution",
+                    "value": "\n".join(breakdown_text),
+                    "inline": False
+                })
+        
+        # Add disclaimer field
+        embed["fields"].append({
+            "name": "⚠️ Disclaimer",
+            "value": "This summary is for informational purposes only and should not be considered financial advice. Always do your own research and consult with a qualified financial advisor before making investment decisions.",
+            "inline": False
+        })
+        
+        return embed
+    
+    @staticmethod
+    def _create_friendly_content_with_crypto(
+        stock_buy_signals: List[Dict],
+        stock_sell_signals: List[Dict],
+        stock_symbols_processed: int,
+        crypto_buy_signals: List[Dict],
+        crypto_sell_signals: List[Dict],
+        crypto_symbols_processed: int,
+        execution_time: datetime
+    ) -> str:
+        """Create a friendly content summary for the message including crypto"""
+        
+        greetings = [
+            "Good evening! 🌆",
+            "Hey there! 👋",
+            "Hello! 🌟",
+            "Hi! ✨"
+        ]
+        
+        # Pick a greeting based on the day
+        greeting_index = execution_time.day % len(greetings)
+        greeting = greetings[greeting_index]
+        
+        total_signals = len(stock_buy_signals) + len(stock_sell_signals) + len(crypto_buy_signals) + len(crypto_sell_signals)
+        
+        if total_signals == 0:
+            return f"{greeting} Today's market scan is complete. No significant signals detected across stocks or crypto - sometimes no trade is the best trade! 💤"
+        
+        # Build signal summary text
+        signal_parts = []
+        
+        stock_signals = len(stock_buy_signals) + len(stock_sell_signals)
+        if stock_signals > 0:
+            signal_parts.append(f"{stock_signals} stock")
+        
+        crypto_signals = len(crypto_buy_signals) + len(crypto_sell_signals)
+        if crypto_signals > 0:
+            signal_parts.append(f"{crypto_signals} crypto")
+        
+        signal_text = " and ".join(signal_parts)
+        
+        if total_signals == 1:
+            return f"{greeting} I found **1 trading signal** for you today! Check it out below 👇"
+        else:
+            return f"{greeting} I found **{total_signals} trading signals** for you today ({signal_text})! Let's see what the market is telling us 👇"

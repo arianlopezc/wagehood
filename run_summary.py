@@ -11,7 +11,7 @@ import logging
 import os
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
 # Load environment variables from .env file
@@ -35,6 +35,7 @@ from src.jobs.fast_parallel_processor import FastParallelProcessor
 # Import analyzers and data requirements
 from src.strategies.macd_rsi_analyzer import MACDRSIAnalyzer
 from src.strategies.sr_breakout_analyzer import SRBreakoutAnalyzer
+from src.strategies.bollinger_breakout_analyzer import BollingerBreakoutAnalyzer
 from src.utils.data_requirements import DataRequirementsCalculator
 
 
@@ -63,6 +64,14 @@ class SummaryResult:
     signal_summaries: List[SignalSummary] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     generated_at: datetime = field(default_factory=utc_now)
+    # Crypto-specific fields
+    crypto_symbols_processed: int = 0
+    crypto_symbols_with_signals: int = 0
+    crypto_total_signals: int = 0
+    crypto_buy_signals: int = 0
+    crypto_sell_signals: int = 0
+    crypto_signal_summaries: List[SignalSummary] = field(default_factory=list)
+    crypto_errors: List[str] = field(default_factory=list)
 
 
 class SummaryGenerator:
@@ -321,6 +330,301 @@ class SummaryGenerator:
             summary.errors.extend(analysis_result['errors'])
         
         return summary
+
+
+class CryptoSummaryGenerator:
+    """Generates end-of-day summaries for cryptocurrency trading signals."""
+    
+    def __init__(self):
+        """Initialize the crypto summary generator with fast parallel processing."""
+        self.strategies = ['macd_rsi', 'sr_breakout', 'bollinger']
+        
+        # Initialize analyzers (same as crypto trigger job)
+        self.macd_rsi_analyzer = MACDRSIAnalyzer()
+        self.sr_analyzer = SRBreakoutAnalyzer()
+        self.bollinger_analyzer = BollingerBreakoutAnalyzer()
+        
+        # Calculate exact data requirements for each strategy
+        self.data_requirements = {
+            'macd_rsi': DataRequirementsCalculator.calculate_macd_rsi_requirements({})['recommended_minimum'],
+            'sr_breakout': DataRequirementsCalculator.calculate_sr_requirements({})['recommended_minimum'],
+            'bollinger': DataRequirementsCalculator.calculate_bollinger_requirements({
+                'bb_period': 20,
+                'consolidation_periods': 5
+            })['recommended_minimum']
+        }
+        
+        logger.info(f"Crypto data requirements - MACD+RSI: {self.data_requirements['macd_rsi']} periods, "
+                   f"SR: {self.data_requirements['sr_breakout']} periods, "
+                   f"Bollinger: {self.data_requirements['bollinger']} periods")
+    
+    async def generate_crypto_summary(
+        self,
+        symbols: Optional[List[str]] = None
+    ) -> Tuple[int, int, int, int, int, List[SignalSummary], List[str]]:
+        """
+        Generate a summary of today's crypto trading signals.
+        
+        Args:
+            symbols: List of crypto symbols to analyze (None = all supported)
+            
+        Returns:
+            Tuple of (symbols_processed, symbols_with_signals, total_signals, 
+                     buy_signals, sell_signals, signal_summaries, errors)
+        """
+        # Get crypto symbols to process
+        if symbols is None:
+            # Get all supported crypto symbols from environment
+            symbols_str = os.getenv('SUPPORTED_CRYPTO_SYMBOLS', 'BTC/USD,ETH/USD')
+            symbols = [s.strip() for s in symbols_str.split(',') if s.strip()]
+        
+        if not symbols:
+            logger.info("No crypto symbols configured for summary")
+            return 0, 0, 0, 0, 0, [], []
+        
+        logger.info(f"Generating today's crypto summary for {len(symbols)} symbols")
+        
+        # End date is now
+        end_date = utc_now()
+        
+        # Process all symbols in parallel with strategy-specific data windows
+        logger.info(f"Processing {len(symbols)} crypto symbols with strategy-specific data requirements")
+        
+        # Create tasks for parallel processing
+        tasks = []
+        for symbol in symbols:
+            task = self._analyze_crypto_symbol_with_exact_data(symbol, end_date)
+            tasks.append(task)
+        
+        # Execute all analyses in parallel
+        symbol_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        symbols_processed = 0
+        symbols_with_signals = 0
+        total_signals = 0
+        buy_signals = 0
+        sell_signals = 0
+        signal_summaries = []
+        errors = []
+        
+        today = utc_now().date()
+        
+        for symbol, analysis_result in zip(symbols, symbol_results):
+            if isinstance(analysis_result, Exception):
+                symbol_summary = SignalSummary(symbol=symbol)
+                symbol_summary.errors.append(str(analysis_result))
+            else:
+                symbol_summary = self._create_summary_from_result(
+                    symbol, analysis_result, today
+                )
+            
+            signal_summaries.append(symbol_summary)
+            symbols_processed += 1
+            
+            if symbol_summary.signal_count > 0:
+                symbols_with_signals += 1
+                total_signals += symbol_summary.signal_count
+                buy_signals += symbol_summary.buy_signals
+                sell_signals += symbol_summary.sell_signals
+            
+            if symbol_summary.errors:
+                errors.extend([f"{symbol}: {err}" for err in symbol_summary.errors])
+        
+        # Sort summaries by signal count (descending)
+        signal_summaries.sort(key=lambda x: x.signal_count, reverse=True)
+        
+        return (symbols_processed, symbols_with_signals, total_signals, 
+                buy_signals, sell_signals, signal_summaries, errors)
+    
+    async def _analyze_crypto_symbol_with_exact_data(
+        self,
+        symbol: str,
+        end_date: datetime
+    ) -> Dict[str, Any]:
+        """
+        Analyze a single crypto symbol with strategy-specific data requirements.
+        """
+        try:
+            # Run all three strategies in parallel with their specific data requirements
+            macd_task = self._run_macd_rsi_analysis(symbol, end_date)
+            sr_task = self._run_sr_analysis(symbol, end_date)
+            bollinger_task = self._run_bollinger_analysis(symbol, end_date)
+            
+            # Wait for all analyses to complete
+            macd_signals, sr_signals, bollinger_signals = await asyncio.gather(
+                macd_task, sr_task, bollinger_task, return_exceptions=True
+            )
+            
+            # Handle exceptions
+            if isinstance(macd_signals, Exception):
+                logger.error(f"Crypto MACD+RSI analysis failed for {symbol}: {macd_signals}")
+                macd_signals = []
+            
+            if isinstance(sr_signals, Exception):
+                logger.error(f"Crypto Support/Resistance analysis failed for {symbol}: {sr_signals}")
+                sr_signals = []
+                
+            if isinstance(bollinger_signals, Exception):
+                logger.error(f"Crypto Bollinger analysis failed for {symbol}: {bollinger_signals}")
+                bollinger_signals = []
+            
+            # Combine results
+            all_signals = []
+            
+            # Add strategy name to signals
+            for signal in macd_signals:
+                signal['strategy'] = 'macd_rsi'
+                all_signals.append(signal)
+            
+            for signal in sr_signals:
+                signal['strategy'] = 'sr_breakout'
+                all_signals.append(signal)
+                
+            for signal in bollinger_signals:
+                signal['strategy'] = 'bollinger'
+                all_signals.append(signal)
+            
+            return {
+                'symbol': symbol,
+                'signals': all_signals,
+                'success': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing crypto {symbol}: {e}")
+            return {
+                'symbol': symbol,
+                'signals': [],
+                'success': False,
+                'error': str(e)
+            }
+    
+    async def _run_macd_rsi_analysis(self, symbol: str, end_date: datetime) -> List[Dict[str, Any]]:
+        """Run MACD+RSI analysis for crypto."""
+        try:
+            periods_needed = self.data_requirements['macd_rsi']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = end_date - timedelta(days=calendar_days_needed)
+            
+            signals = await self.macd_rsi_analyzer.analyze_symbol(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                timeframe='1d'
+            )
+            
+            return signals or []
+            
+        except Exception as e:
+            logger.error(f"Crypto MACD+RSI analysis failed for {symbol}: {e}")
+            raise
+    
+    async def _run_sr_analysis(self, symbol: str, end_date: datetime) -> List[Dict[str, Any]]:
+        """Run Support/Resistance analysis for crypto."""
+        try:
+            periods_needed = self.data_requirements['sr_breakout']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = end_date - timedelta(days=calendar_days_needed)
+            
+            signals = await self.sr_analyzer.analyze_symbol(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                timeframe='1d'
+            )
+            
+            return signals or []
+            
+        except Exception as e:
+            logger.error(f"Crypto Support/Resistance analysis failed for {symbol}: {e}")
+            raise
+    
+    async def _run_bollinger_analysis(self, symbol: str, end_date: datetime) -> List[Dict[str, Any]]:
+        """Run Bollinger Band analysis for crypto."""
+        try:
+            periods_needed = self.data_requirements['bollinger']
+            calendar_days_needed = DataRequirementsCalculator.calculate_calendar_days_needed(
+                periods_needed, '1d'
+            )
+            start_date = end_date - timedelta(days=calendar_days_needed)
+            
+            signals = await self.bollinger_analyzer.analyze_symbol(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                timeframe='1d'
+            )
+            
+            return signals or []
+            
+        except Exception as e:
+            logger.error(f"Crypto Bollinger analysis failed for {symbol}: {e}")
+            raise
+    
+    def _create_summary_from_result(
+        self,
+        symbol: str,
+        analysis_result: Dict[str, Any],
+        today: Any
+    ) -> SignalSummary:
+        """Convert parallel processing result to SignalSummary."""
+        summary = SignalSummary(symbol=symbol)
+        
+        if not analysis_result.get('success', False):
+            # Handle failed analysis
+            error = analysis_result.get('error', 'Unknown error')
+            summary.errors.append(error)
+            return summary
+        
+        # Get all signals from the result
+        all_signals = analysis_result.get('signals', [])
+        
+        # Filter for today's signals only (same approach as trigger jobs)
+        todays_signals = []
+        for signal in all_signals:
+            signal_date = signal.get('timestamp')
+            if signal_date:
+                # Handle datetime objects
+                if isinstance(signal_date, datetime):
+                    signal_date = signal_date.date()
+                # Handle string timestamps
+                elif isinstance(signal_date, str):
+                    try:
+                        signal_date = datetime.fromisoformat(signal_date.replace('Z', '+00:00')).date()
+                    except:
+                        continue
+                
+                # Check if signal is from today or yesterday (for daily timeframe)
+                days_diff = (today - signal_date).days
+                if days_diff <= 1:  # Today or yesterday
+                    todays_signals.append(signal)
+        
+        # Process today's signals
+        if todays_signals:
+            summary.signal_count = len(todays_signals)
+            summary.buy_signals = sum(1 for s in todays_signals if s.get('signal_type') == 'BUY')
+            summary.sell_signals = sum(1 for s in todays_signals if s.get('signal_type') == 'SELL')
+            
+            # Calculate average confidence
+            confidences = [s.get('confidence', 0) for s in todays_signals]
+            summary.avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+            
+            # Get latest signal
+            summary.latest_signal = todays_signals[0]
+            
+            # Get unique strategies that generated signals
+            summary.strategies = list(set(s.get('strategy', '') for s in todays_signals if s.get('strategy')))
+        
+        # Add any errors from the analysis
+        if analysis_result.get('errors'):
+            summary.errors.extend(analysis_result['errors'])
+        
+        return summary
     
 async def main(
     symbols: Optional[List[str]] = None,
@@ -336,8 +640,37 @@ async def main(
     Returns:
         SummaryResult with today's signal findings
     """
-    generator = SummaryGenerator()
-    result = await generator.generate_summary(symbols=symbols)
+    start_time = utc_now()
+    
+    # Create generators
+    stock_generator = SummaryGenerator()
+    crypto_generator = CryptoSummaryGenerator()
+    
+    # Run both stock and crypto summaries in parallel
+    stock_task = stock_generator.generate_summary(symbols=symbols)
+    crypto_task = crypto_generator.generate_crypto_summary()
+    
+    # Execute both in parallel
+    stock_result, crypto_data = await asyncio.gather(stock_task, crypto_task)
+    
+    # Unpack crypto data
+    (crypto_symbols_processed, crypto_symbols_with_signals, crypto_total_signals,
+     crypto_buy_signals, crypto_sell_signals, crypto_signal_summaries, crypto_errors) = crypto_data
+    
+    # Merge results into a comprehensive SummaryResult
+    result = stock_result  # Start with stock result
+    
+    # Add crypto data to the result
+    result.crypto_symbols_processed = crypto_symbols_processed
+    result.crypto_symbols_with_signals = crypto_symbols_with_signals
+    result.crypto_total_signals = crypto_total_signals
+    result.crypto_buy_signals = crypto_buy_signals
+    result.crypto_sell_signals = crypto_sell_signals
+    result.crypto_signal_summaries = crypto_signal_summaries
+    result.crypto_errors = crypto_errors
+    
+    # Update total execution time to include both stock and crypto
+    result.execution_duration_seconds = (utc_now() - start_time).total_seconds()
     
     # Send to Discord only if this is a scheduled run
     if scheduled:
@@ -422,13 +755,16 @@ if __name__ == "__main__":
     # Print results
     print(f"\nEnd-of-Day Signal Summary:")
     print(f"Generated at: {result.generated_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    print(f"Execution time: {result.execution_duration_seconds:.2f} seconds")
+    
+    # Stock Summary
+    print(f"\n📈 STOCK SUMMARY:")
     print(f"Symbols processed: {result.symbols_processed}")
     print(f"Symbols with signals: {result.symbols_with_signals}")
     print(f"Total signals: {result.total_signals} ({result.buy_signals} BUY, {result.sell_signals} SELL)")
-    print(f"Execution time: {result.execution_duration_seconds:.2f} seconds")
     
     if result.signal_summaries:
-        print(f"\nTop Opportunities:")
+        print(f"\nTop Stock Opportunities:")
         for summary in result.signal_summaries[:10]:
             if summary.signal_count > 0:
                 signal_type = "BUY" if summary.buy_signals > summary.sell_signals else "SELL"
@@ -440,9 +776,30 @@ if __name__ == "__main__":
                 print(f"  {summary.symbol}: {summary.signal_count} signals, "
                       f"{signal_type} bias, {summary.avg_confidence:.0%} avg confidence{strategy_info}")
     
-    if result.errors:
-        print(f"\nErrors ({len(result.errors)}):")
-        for error in result.errors[:5]:
+    # Crypto Summary
+    print(f"\n🪙 CRYPTO SUMMARY:")
+    print(f"Symbols processed: {result.crypto_symbols_processed}")
+    print(f"Symbols with signals: {result.crypto_symbols_with_signals}")
+    print(f"Total signals: {result.crypto_total_signals} ({result.crypto_buy_signals} BUY, {result.crypto_sell_signals} SELL)")
+    
+    if result.crypto_signal_summaries:
+        print(f"\nTop Crypto Opportunities:")
+        for summary in result.crypto_signal_summaries[:10]:
+            if summary.signal_count > 0:
+                signal_type = "BUY" if summary.buy_signals > summary.sell_signals else "SELL"
+                
+                # Show strategy breakdown for this symbol
+                strategy_names = [s.replace('_', ' ').title() for s in summary.strategies]
+                strategy_info = f" ({', '.join(strategy_names)})" if strategy_names else ""
+                
+                print(f"  {summary.symbol}: {summary.signal_count} signals, "
+                      f"{signal_type} bias, {summary.avg_confidence:.0%} avg confidence{strategy_info}")
+    
+    # Combined errors
+    all_errors = result.errors + result.crypto_errors
+    if all_errors:
+        print(f"\nErrors ({len(all_errors)}):")
+        for error in all_errors[:5]:
             print(f"  - {error}")
-        if len(result.errors) > 5:
-            print(f"  ... and {len(result.errors) - 5} more errors")
+        if len(all_errors) > 5:
+            print(f"  ... and {len(all_errors) - 5} more errors")
