@@ -175,6 +175,31 @@ class MACDRSIStrategy(TradingStrategy):
                     histogram[i],
                 )
 
+                # Check for bearish signal
+                bearish_signal = self._check_bearish_signal(
+                    macd_curr,
+                    macd_prev,
+                    signal_curr,
+                    signal_prev,
+                    rsi_curr,
+                    rsi_prev,
+                    histogram[i],
+                )
+
+                # IMPORTANT: Only generate one signal per timestamp to avoid conflicts
+                # If both conditions are met, choose based on signal strength
+                if bullish_signal and bearish_signal:
+                    # This should not happen with proper logic, but if it does,
+                    # choose the signal with stronger MACD divergence
+                    macd_divergence = abs(macd_curr - signal_curr)
+                    if histogram[i] > 0:
+                        # Positive histogram favors bullish
+                        bearish_signal = False
+                    else:
+                        # Negative histogram favors bearish
+                        bullish_signal = False
+                    logger.warning(f"[MACD+RSI] Both BUY and SELL conditions met at index {i}, choosing based on histogram: {'BUY' if bullish_signal else 'SELL'}")
+
                 if bullish_signal:
                     logger.info(f"[MACD+RSI] Bullish signal detected at index {i}")
                     signal = self._create_bullish_signal(
@@ -197,18 +222,7 @@ class MACDRSIStrategy(TradingStrategy):
                             f"[MACD+RSI] Bullish signal filtered out (low confidence)"
                         )
 
-                # Check for bearish signal
-                bearish_signal = self._check_bearish_signal(
-                    macd_curr,
-                    macd_prev,
-                    signal_curr,
-                    signal_prev,
-                    rsi_curr,
-                    rsi_prev,
-                    histogram[i],
-                )
-
-                if bearish_signal:
+                elif bearish_signal:
                     signal = self._create_bearish_signal(
                         data,
                         i,
@@ -271,11 +285,12 @@ class MACDRSIStrategy(TradingStrategy):
         # Secondary signal: MACD crossover + RSI uptrend + positive histogram
         secondary_signal = macd_crossover and rsi_uptrend and histogram_positive
 
-        # Tertiary signal: Strong MACD crossover alone (relaxed for more signals)
+        # Tertiary signal: Strong MACD crossover with directional confirmation
         macd_strength = (
             abs(macd_curr - signal_curr) / abs(signal_curr) if signal_curr != 0 else 0
         )
-        strong_macd_signal = macd_crossover and macd_strength > 0.02  # 2% divergence
+        # For bullish, MACD must be above signal line
+        strong_macd_signal = macd_crossover and macd_strength > 0.02 and macd_curr > signal_curr
 
         return primary_signal or secondary_signal or strong_macd_signal
 
@@ -312,11 +327,12 @@ class MACDRSIStrategy(TradingStrategy):
         # Secondary signal: MACD crossover + RSI downtrend + negative histogram
         secondary_signal = macd_crossover and rsi_downtrend and histogram_negative
 
-        # Tertiary signal: Strong MACD crossover alone (relaxed for more signals)
+        # Tertiary signal: Strong MACD crossover with directional confirmation
         macd_strength = (
             abs(macd_curr - signal_curr) / abs(signal_curr) if signal_curr != 0 else 0
         )
-        strong_macd_signal = macd_crossover and macd_strength > 0.02  # 2% divergence
+        # For bearish, MACD must be below signal line
+        strong_macd_signal = macd_crossover and macd_strength > 0.02 and macd_curr < signal_curr
 
         return primary_signal or secondary_signal or strong_macd_signal
 

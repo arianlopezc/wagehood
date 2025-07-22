@@ -322,64 +322,23 @@ def main():
     manager = CronJobManager()
     
     try:
-        # Track the start of this minute's execution
-        minute_start = time.time()
-        iteration = 0
+        # Run once per minute instead of 6 times
+        logger.info(f"Starting 1-day analysis cron job at {datetime.now()}")
         
-        # Run for up to 60 seconds (with some buffer)
-        while time.time() - minute_start < 58:  # Stop 2 seconds before the minute ends
-            iteration_start = time.time()
-            
-            # Calculate which 10-second slot we should be in
-            elapsed_in_minute = iteration_start - minute_start
-            expected_iteration = int(elapsed_in_minute / 10)
-            
-            # If we've done 6 iterations, we're done
-            if expected_iteration >= 6:
-                break
-            
-            # Log if we're behind schedule
-            if expected_iteration > iteration:
-                logger.warning(f"Behind schedule - should be on iteration {expected_iteration + 1}, but on {iteration + 1}")
-                iteration = expected_iteration
-            
-            # Check if another instance is running
-            if manager.is_locked():
-                logger.info(f"Another instance is already running - skipping iteration {iteration + 1}")
-            else:
-                # Run the analysis with timeout monitoring
-                logger.info(f"Starting iteration {iteration + 1} at {elapsed_in_minute:.1f}s into the minute")
-                success = manager.run_with_timeout()
-                if not success:
-                    logger.error(f"Analysis failed on iteration {iteration + 1}")
-            
-            # Calculate next run time (next 10-second boundary)
-            next_run_time = minute_start + ((iteration + 1) * 10)
-            current_time = time.time()
-            
-            # If we're past the next boundary, move to the appropriate slot
-            if current_time >= next_run_time:
-                # We've overrun - figure out which slot we should be in now
-                new_iteration = int((current_time - minute_start) / 10)
-                if new_iteration > iteration:
-                    logger.info(f"Execution overran - jumping from iteration {iteration + 1} to {new_iteration + 1}")
-                    iteration = new_iteration
-                else:
-                    iteration += 1
-            else:
-                # Wait until the next 10-second boundary
-                sleep_time = next_run_time - current_time
-                if sleep_time > 0 and iteration < 5:  # Don't sleep after the last iteration
-                    logger.info(f"Sleeping for {sleep_time:.1f}s until next run")
-                    time.sleep(sleep_time)
-                iteration += 1
-            
-            # Safety check - don't run more than 6 times
-            if iteration >= 6:
-                break
+        # Check if another instance is running
+        if manager.is_locked():
+            logger.info("Another instance is already running - skipping this run")
+            return 0
         
-        logger.info(f"Completed {iteration} iterations in {time.time() - minute_start:.1f}s")
-        return 0
+        # Run the analysis with timeout monitoring
+        success = manager.run_with_timeout()
+        
+        if success:
+            logger.info("1-day analysis completed successfully")
+            return 0
+        else:
+            logger.error("1-day analysis failed")
+            return 1
         
     except Exception as e:
         logger.error(f"Cron job failed: {e}")

@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import json
+import fcntl
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 from dotenv import load_dotenv
@@ -126,18 +127,43 @@ class RealTime1DAnalyzer:
         return {}
     
     def _save_signal_history(self):
-        """Save signal history to persistent storage."""
+        """Save signal history to persistent storage with file locking."""
         try:
-            # Convert tuple keys to strings for JSON serialization
-            data = {}
-            for (symbol, strategy), signal_type in self.signal_history.items():
-                key = f"{symbol}|{strategy}"
-                data[key] = signal_type
+            # Ensure file exists
+            if not os.path.exists(self.signal_history_file):
+                # Create with empty data
+                with open(self.signal_history_file, 'w') as f:
+                    json.dump({}, f)
             
-            logger.info(f"Saving {len(data)} signal history entries to {self.signal_history_file}")
-            with open(self.signal_history_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            logger.info(f"Successfully saved signal history to {self.signal_history_file}")
+            # Open file for reading and writing
+            with open(self.signal_history_file, 'r+') as f:
+                # Acquire exclusive lock
+                fcntl.flock(f, fcntl.LOCK_EX)
+                
+                try:
+                    # Read current data
+                    f.seek(0)
+                    try:
+                        current_data = json.load(f)
+                    except (json.JSONDecodeError, ValueError):
+                        current_data = {}
+                    
+                    # Update with our changes
+                    for (symbol, strategy), signal_type in self.signal_history.items():
+                        key = f"{symbol}|{strategy}"
+                        current_data[key] = signal_type
+                    
+                    # Write back
+                    f.seek(0)
+                    f.truncate()
+                    json.dump(current_data, f, indent=2)
+                    
+                    logger.info(f"Successfully saved {len(current_data)} signal history entries with file locking")
+                    
+                finally:
+                    # Release lock
+                    fcntl.flock(f, fcntl.LOCK_UN)
+                    
         except Exception as e:
             logger.error(f"Failed to save signal history to {self.signal_history_file}: {e}")
             import traceback
@@ -308,6 +334,14 @@ class RealTime1DAnalyzer:
                     logger.warning(f"Error processing MACD+RSI signal for {symbol}: {e}")
                     continue
             
+            # IMPORTANT: Only return the LATEST signal to prevent notification loops
+            if current_signals:
+                # Sort by timestamp descending (most recent first)
+                current_signals.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+                latest_signal = current_signals[0]
+                logger.info(f"Found {len(current_signals)} MACD+RSI signals for {symbol}, using only the latest from {latest_signal.get('timestamp')}")
+                return [latest_signal]
+            
             return current_signals
             
         except Exception as e:
@@ -349,6 +383,14 @@ class RealTime1DAnalyzer:
                 except Exception as e:
                     logger.warning(f"Error processing S/R signal for {symbol}: {e}")
                     continue
+            
+            # IMPORTANT: Only return the LATEST signal to prevent notification loops
+            if current_signals:
+                # Sort by timestamp descending (most recent first)
+                current_signals.sort(key=lambda x: x.get('timestamp', datetime.min), reverse=True)
+                latest_signal = current_signals[0]
+                logger.info(f"Found {len(current_signals)} S/R signals for {symbol}, using only the latest from {latest_signal.get('timestamp')}")
+                return [latest_signal]
             
             return current_signals
             
@@ -457,13 +499,15 @@ class RealTime1DAnalyzer:
                 # Send notification
                 success = await self.discord_sender.send_notification(notification)
                 
+                # ALWAYS update signal history to prevent notification loops
+                self.signal_history[key] = signal_type
+                self._save_signal_history()
+                
                 if success:
-                    # Update signal history and persist
-                    self.signal_history[key] = signal_type
-                    self._save_signal_history()
                     logger.info(f"✅ Notification sent for {symbol} {strategy} {signal_type}")
                 else:
                     logger.error(f"❌ Failed to send notification for {symbol} {strategy}")
+                    logger.warning(f"⚠️ Updated history anyway to prevent notification loops")
                     
             except Exception as e:
                 logger.error(f"Error sending notification for {symbol} {strategy}: {e}")
