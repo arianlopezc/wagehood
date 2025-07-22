@@ -692,7 +692,31 @@ class SummaryFormatter:
         
         if all_signals:
             all_signals.sort(key=lambda x: x['confidence'], reverse=True)
-            top_signals = all_signals[:5]
+            
+            # Ensure representation from both stocks and crypto
+            stock_signals = [s for s in all_signals if s['market_type'] == '📈']
+            crypto_signals = [s for s in all_signals if s['market_type'] == '🪙']
+            
+            # Build mixed top opportunities
+            top_signals = []
+            
+            # Add top 3 stocks
+            top_signals.extend(stock_signals[:3])
+            
+            # Add top 2 cryptos (if available)
+            if crypto_signals:
+                top_signals.extend(crypto_signals[:2])
+            
+            # If no cryptos, fill with more stocks
+            if len(top_signals) < 5 and len(stock_signals) > 3:
+                remaining_stocks = stock_signals[3:5-len(top_signals)+3]
+                top_signals.extend(remaining_stocks)
+            
+            # Sort the mixed list by confidence
+            top_signals.sort(key=lambda x: x['confidence'], reverse=True)
+            
+            # Ensure we don't exceed 5 signals
+            top_signals = top_signals[:5]
             
             top_text = []
             for signal in top_signals:
