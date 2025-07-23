@@ -519,10 +519,21 @@ def generate_summary(config_manager: ConfigManager, symbols: Optional[str], disc
             # Display results
             click.echo(f"\n✅ Summary generation completed!")
             click.echo(f"⏰ Generated at: {result.generated_at.strftime('%Y-%m-%d %H:%M:%S')}")
-            click.echo(f"📊 Symbols processed: {result.symbols_processed}")
-            click.echo(f"🎯 Symbols with signals: {result.symbols_with_signals}")
-            click.echo(f"📈 Total signals: {result.total_signals} ({result.buy_signals} BUY, {result.sell_signals} SELL)")
-            click.echo(f"⏱️  Execution time: {result.execution_duration_seconds:.2f} seconds")
+            
+            # Stock summary
+            click.echo(f"\n📈 STOCK SUMMARY:")
+            click.echo(f"   Symbols processed: {result.symbols_processed}")
+            click.echo(f"   Symbols with signals: {result.symbols_with_signals}")
+            click.echo(f"   Total signals: {result.total_signals} ({result.buy_signals} BUY, {result.sell_signals} SELL)")
+            
+            # Crypto summary (if available)
+            if hasattr(result, 'crypto_symbols_processed') and result.crypto_symbols_processed > 0:
+                click.echo(f"\n🪙 CRYPTO SUMMARY:")
+                click.echo(f"   Symbols processed: {result.crypto_symbols_processed}")
+                click.echo(f"   Symbols with signals: {result.crypto_symbols_with_signals}")
+                click.echo(f"   Total signals: {result.crypto_total_signals} ({result.crypto_buy_signals} BUY, {result.crypto_sell_signals} SELL)")
+            
+            click.echo(f"\n⏱️  Execution time: {result.execution_duration_seconds:.2f} seconds")
             
             if result.errors:
                 click.echo(f"\n⚠️  {len(result.errors)} errors occurred:")
@@ -531,16 +542,54 @@ def generate_summary(config_manager: ConfigManager, symbols: Optional[str], disc
                 if len(result.errors) > 3:
                     click.echo(f"   ... and {len(result.errors) - 3} more errors")
             
-            # Show top signals
+            # Show top signals - combine stocks and crypto
+            all_summaries = []
+            
+            # Add stock summaries
             if result.signal_summaries:
-                top_signals = [s for s in result.signal_summaries if s.signal_count > 0][:5]
+                for s in result.signal_summaries:
+                    if s.signal_count > 0:
+                        s.is_crypto = False  # Mark as stock
+                        all_summaries.append(s)
+            
+            # Add crypto summaries
+            if hasattr(result, 'crypto_signal_summaries') and result.crypto_signal_summaries:
+                for s in result.crypto_signal_summaries:
+                    if s.signal_count > 0:
+                        s.is_crypto = True  # Mark as crypto
+                        all_summaries.append(s)
+            
+            if all_summaries:
+                # Sort all by confidence
+                all_summaries.sort(key=lambda x: x.avg_confidence, reverse=True)
+                
+                # Ensure representation from both markets
+                stock_summaries = [s for s in all_summaries if not s.is_crypto]
+                crypto_summaries = [s for s in all_summaries if s.is_crypto]
+                
+                # Build mixed top opportunities (3 stocks + 2 cryptos)
+                top_signals = []
+                top_signals.extend(stock_summaries[:3])
+                if crypto_summaries:
+                    top_signals.extend(crypto_summaries[:2])
+                
+                # If no cryptos, fill with more stocks
+                if len(top_signals) < 5 and len(stock_summaries) > 3:
+                    top_signals.extend(stock_summaries[3:5])
+                
+                # Sort mixed list by confidence
+                top_signals.sort(key=lambda x: x.avg_confidence, reverse=True)
+                top_signals = top_signals[:5]
+                
                 if top_signals:
                     click.echo(f"\n🎯 Top opportunities:")
                     for summary in top_signals:
-                        signal_type = "📈 BUY" if summary.buy_signals > summary.sell_signals else "📉 SELL"
+                        market_emoji = "🪙" if summary.is_crypto else "📈"
+                        signal_type = "BUY" if summary.buy_signals > summary.sell_signals else "SELL"
+                        signal_emoji = "🟢" if signal_type == "BUY" else "🔴"
                         strategy_names = [s.replace('_', ' ').title() for s in summary.strategies]
                         strategy_info = f" ({', '.join(strategy_names)})" if strategy_names else ""
-                        click.echo(f"   • {summary.symbol}: {signal_type} ({summary.signal_count} signals, {summary.avg_confidence:.0%} avg confidence){strategy_info}")
+                        click.echo(f"   • {market_emoji} {summary.symbol}: {signal_emoji} {signal_type} ({summary.signal_count} signals, {summary.avg_confidence:.0%} avg confidence){strategy_info}")
             
             # Show Discord notification status
             if discord:
